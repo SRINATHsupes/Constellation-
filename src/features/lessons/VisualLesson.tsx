@@ -520,19 +520,21 @@ export default function VisualLesson({
             isPhysicsLesson && styles.physicsImageFrame,
           ]}
         >
-          {typeof imageSource === 'string' ? (
-            <SvgUri
-              uri={imageSource}
-              width="100%"
-              height="100%"
-            />
-          ) : (
-            <Image
-              source={imageSource}
-              style={styles.image}
-              resizeMode="contain"
-            />
-          )}
+          <View style={styles.imageInner}>
+            {typeof imageSource === 'string' ? (
+              <SvgUri
+                uri={imageSource}
+                width="100%"
+                height="100%"
+              />
+            ) : (
+              <Image
+                source={imageSource}
+                style={styles.image}
+                resizeMode="contain"
+              />
+            )}
+          </View>
         </View>
       )}
 
@@ -583,10 +585,21 @@ const styles = StyleSheet.create({
 
   imageFrame: {
     width: '100%',
-    height: 260,
-    borderRadius: 22,
+    height: 270,
+    borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    marginBottom: 14,
+  },
+
+  imageInner: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -597,24 +610,25 @@ const styles = StyleSheet.create({
   },
 
   manufacturingImageFrame: {
-    height: 190,
-    marginBottom: 10,
-    borderColor: 'rgba(255,209,102,0.22)',
+    height: 250,
+    borderColor: 'rgba(255,209,102,0.24)',
+    backgroundColor: 'rgba(255,209,102,0.035)',
   },
 
   electronicsImageFrame: {
-    height: 190,
-    marginBottom: 10,
-    borderColor: 'rgba(127,231,255,0.22)',
+    height: 250,
+    borderColor: 'rgba(127,231,255,0.24)',
+    backgroundColor: 'rgba(127,231,255,0.035)',
   },
 
   physicsImageFrame: {
-    height: 190,
-    marginBottom: 10,
-    borderColor: 'rgba(255,255,255,0.16)',
+    height: 250,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.035)',
   },
 
   animationArea: {
+    minHeight: 220,
     height: 220,
     borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.035)',

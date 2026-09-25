@@ -24,6 +24,12 @@
         "com.google.android.gms.permission.AD_ID",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
@@ -47,6 +53,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "23eb9da6-0429-4f02-ab38-50f1eb9439fc"
+      }
+    },
+    "owner": "srinath12s-team"
   }
 }

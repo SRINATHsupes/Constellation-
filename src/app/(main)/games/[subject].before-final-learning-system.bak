@@ -1,0 +1,1871 @@
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+import { collectStar, getCollectedStars } from '@/features/stars/star-store';
+
+type Level = {
+  id: string;
+  title: string;
+  guide: string;
+  mission: string;
+};
+
+type World = {
+  title: string;
+  icon: string;
+  description: string;
+  levels: Level[];
+};
+
+const WORLDS: Record<string, World> = {
+  vedic: {
+    title: 'Vedic Maths',
+    icon: '🔢',
+    description: 'Discover patterns that make calculation faster.',
+    levels: [
+      {
+        id: 'vedic-01',
+        title: 'Nikhilam',
+        guide: 'Nikhilam works with numbers close to a base such as 10, 100 or 1000.',
+        mission: 'Use the method to calculate prices or quantities mentally.',
+      },
+      {
+        id: 'vedic-02',
+        title: 'Near the Base',
+        guide: 'Numbers just above or below a base can be handled through their differences.',
+        mission: 'Try a near-100 calculation without a calculator.',
+      },
+      {
+        id: 'vedic-03',
+        title: 'Mental Market',
+        guide: 'Use mental calculation while buying several things.',
+        mission: 'Calculate a small shopping total in your head.',
+      },
+    ],
+  },
+
+  manufacturing: {
+    title: 'Manufacturing',
+    icon: '⚙️',
+    description: 'Discover how machines turn parts into useful things.',
+    levels: [
+      {
+        id: 'manufacturing-01',
+        title: 'Gears',
+        guide: 'Gears transfer rotation from one part to another.',
+        mission: 'Find a machine near you that transfers motion.',
+      },
+      {
+        id: 'manufacturing-02',
+        title: 'Machine Line',
+        guide: 'Manufacturing often follows a sequence: material, process, inspection and output.',
+        mission: 'Find three machines around you and identify their purpose.',
+      },
+      {
+        id: 'manufacturing-03',
+        title: 'Mini Factory',
+        guide: 'A factory works by coordinating many connected processes.',
+        mission: 'Observe how one everyday object is manufactured.',
+      },
+    ],
+  },
+
+  music: {
+    title: 'Music',
+    icon: '🎵',
+    description: 'Explore rhythm, vibration and sound.',
+    levels: [
+      {
+        id: 'music-01',
+        title: 'Rhythm',
+        guide: 'Music can be organised into repeating patterns of beats.',
+        mission: 'Tap the rhythm of a song you know.',
+      },
+      {
+        id: 'music-02',
+        title: 'Vibration',
+        guide: 'Sound begins with vibration travelling through a medium.',
+        mission: 'Touch an instrument or speaker while it produces sound.',
+      },
+      {
+        id: 'music-03',
+        title: 'Sound Lab',
+        guide: 'Different frequencies and patterns create different sounds.',
+        mission: 'Compare two sounds and describe how they differ.',
+      },
+    ],
+  },
+
+  nutrition: {
+    title: 'Nutrition',
+    icon: '🌱',
+    description: 'Learn how food provides nutrients your body needs.',
+    levels: [
+      {
+        id: 'nutrition-01',
+        title: 'Food Detective',
+        guide: 'Foods contain different combinations of nutrients and energy.',
+        mission: 'Find three minimally processed foods at home.',
+      },
+      {
+        id: 'nutrition-02',
+        title: 'Vitamin Hunt',
+        guide: 'Vitamins and minerals have different roles in normal body function.',
+        mission: 'Find foods that provide different vitamins or minerals.',
+      },
+      {
+        id: 'nutrition-03',
+        title: 'Build a Meal',
+        guide: 'A varied meal can combine vegetables or fruit, protein foods and whole grains or other staple foods.',
+        mission: 'Help prepare a balanced meal with an adult.',
+      },
+    ],
+  },
+
+  humanity: {
+    title: 'Humanity',
+    icon: '🤝',
+    description: 'Explore cooperation, empathy and community.',
+    levels: [
+      {
+        id: 'humanity-01',
+        title: 'What People Need',
+        guide: 'People have different needs, abilities and circumstances.',
+        mission: 'Notice one way someone helps another person today.',
+      },
+      {
+        id: 'humanity-02',
+        title: 'Work Together',
+        guide: 'Groups can solve problems by sharing information and responsibilities.',
+        mission: 'Complete a small household task with someone else.',
+      },
+      {
+        id: 'humanity-03',
+        title: 'Community Rescue',
+        guide: 'Helping a community means understanding needs and using resources carefully.',
+        mission: 'Identify one useful way your family could help your community.',
+      },
+    ],
+  },
+
+  electronics: {
+    title: 'Electronics',
+    icon: '⚡',
+    description: 'Start with water pipes, discover 0 and 1, then reach circuits and code.',
+    levels: [
+      {
+        id: 'electronics-01',
+        title: 'Water Logic',
+        guide: 'Imagine water flowing through pipes. Open pipe = 1. Blocked pipe = 0.',
+        mission: 'Look at a real tap, pipe or switch and identify what controls flow.',
+      },
+      {
+        id: 'electronics-02',
+        title: 'Logic Pipes',
+        guide: 'Connected paths can behave like simple logic gates.',
+        mission: 'Explain a real situation where something must be ON or OFF.',
+      },
+      {
+        id: 'electronics-03',
+        title: 'From 0 to Code',
+        guide: 'Computers use binary states. Characters and data can be represented using numbers such as ASCII.',
+        mission: 'Find the binary representation of one simple character.',
+      },
+    ],
+  },
+
+  physics: {
+    title: 'Physics',
+    icon: '🔬',
+    description: 'Change the world and observe what happens.',
+    levels: [
+      {
+        id: 'physics-01',
+        title: 'Motion',
+        guide: 'Motion describes how an object changes position over time.',
+        mission: 'Roll two objects and compare how far they travel.',
+      },
+      {
+        id: 'physics-02',
+        title: 'Force & Friction',
+        guide: 'A force can change motion. Friction can oppose motion between surfaces.',
+        mission: 'Push an object across two different surfaces and compare them.',
+      },
+      {
+        id: 'physics-03',
+        title: 'Energy Workshop',
+        guide: 'Energy can be transferred and transformed between different forms.',
+        mission: 'Find one everyday example where energy changes form.',
+      },
+    ],
+  },
+
+  arts: {
+    title: 'Arts',
+    icon: '🎨',
+    description: 'Learn to see complex drawings as families of simple structures.',
+    levels: [
+      {
+        id: 'arts-01',
+        title: 'Circle Family',
+        guide: 'Circles and curves can become eyes, wheels, flowers, faces and many other forms.',
+        mission: 'Draw five things around you using circles and curves.',
+      },
+      {
+        id: 'arts-02',
+        title: 'Triangle Family',
+        guide: 'Triangles can become mountains, roofs, arrows, trees and structural forms.',
+        mission: 'Find three objects around you containing triangle-like structures.',
+      },
+      {
+        id: 'arts-03',
+        title: 'Square Family',
+        guide: 'Squares and rectangles can become windows, buildings, robots and designed objects.',
+        mission: 'Draw an object using circles, triangles and rectangles together.',
+      },
+    ],
+  },
+
+  nature: {
+    title: 'Nature',
+    icon: '🌿',
+    description: 'Discover relationships between living things and their environment.',
+    levels: [
+      {
+        id: 'nature-01',
+        title: 'Plant World',
+        guide: 'Plants interact with sunlight, water, soil, air and other organisms.',
+        mission: 'Observe a plant and identify what it needs to grow.',
+      },
+      {
+        id: 'nature-02',
+        title: 'Food Web',
+        guide: 'Living things are connected through feeding relationships.',
+        mission: 'Find a simple food chain in a local environment.',
+      },
+      {
+        id: 'nature-03',
+        title: 'Restore the Ecosystem',
+        guide: 'Changing one part of an ecosystem can affect other parts.',
+        mission: 'Observe one local ecosystem and identify one thing that supports it.',
+      },
+    ],
+  },
+};
+
+function GameButton({
+  children,
+  onPress,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.button,
+        disabled && styles.buttonDisabled,
+        pressed && !disabled && styles.buttonPressed,
+      ]}
+    >
+      <Text style={styles.buttonText}>{children}</Text>
+    </Pressable>
+  );
+}
+
+function NikhilamGame({ onComplete }: { onComplete: () => void }) {
+  const [step, setStep] = useState(0);
+
+  const problems = [
+    { a: 98, b: 97, answer: 9506 },
+    { a: 97, b: 96, answer: 9312 },
+    { a: 99, b: 96, answer: 9504 },
+  ];
+
+  const problem = problems[step];
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>NIKHILAM MARKET LOCK</Text>
+
+      <Text style={styles.gameText}>
+        These prices are close to 100. Use 100 as your base.
+      </Text>
+
+      <View style={styles.numberCard}>
+        <Text style={styles.bigNumber}>
+          {problem.a} × {problem.b}
+        </Text>
+      </View>
+
+      <Text style={styles.formula}>
+        Differences from 100:
+        {'\n'}
+        {problem.a - 100} and {problem.b - 100}
+      </Text>
+
+      <Text style={styles.hint}>
+        Think about the base and the small differences.
+      </Text>
+
+      {[9506, 9312, 9504].map((value) => (
+        <GameButton
+          key={value}
+          onPress={() => {
+            if (value === problem.answer) {
+              if (step < problems.length - 1) {
+                setStep(step + 1);
+              } else {
+                onComplete();
+              }
+            }
+          }}
+        >
+          {value}
+        </GameButton>
+      ))}
+
+      <Text style={styles.progressText}>
+        Lock {step + 1} / {problems.length}
+      </Text>
+    </View>
+  );
+}
+
+function ManufacturingGame({ onComplete }: { onComplete: () => void }) {
+  const [order, setOrder] = useState<string[]>([]);
+
+  const parts = ['RAW MATERIAL', 'MACHINE', 'GEAR', 'INSPECTION'];
+
+  const addPart = (part: string) => {
+    if (order.includes(part)) return;
+
+    const next = [...order, part];
+    setOrder(next);
+
+    if (
+      next.join('|') ===
+      'RAW MATERIAL|MACHINE|GEAR|INSPECTION'
+    ) {
+      onComplete();
+    }
+  };
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>MINI FACTORY</Text>
+      <Text style={styles.gameText}>
+        Build the production line in a sensible sequence.
+      </Text>
+
+      <View style={styles.factoryLine}>
+        {order.length === 0 ? (
+          <Text style={styles.emptyLine}>Tap parts to build the line</Text>
+        ) : (
+          order.map((part) => (
+            <View key={part} style={styles.factoryPart}>
+              <Text style={styles.factoryPartText}>{part}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      {parts.map((part) => (
+        <GameButton
+          key={part}
+          disabled={order.includes(part)}
+          onPress={() => addPart(part)}
+        >
+          {part}
+        </GameButton>
+      ))}
+    </View>
+  );
+}
+
+function MusicGame({ onComplete }: { onComplete: () => void }) {
+  const pattern = [0, 1, 0, 0, 1];
+  const [input, setInput] = useState<number[]>([]);
+
+  const tap = (value: number) => {
+    const next = [...input, value];
+
+    if (next[next.length - 1] !== pattern[next.length - 1]) {
+      setInput([]);
+      return;
+    }
+
+    setInput(next);
+
+    if (next.length === pattern.length) {
+      onComplete();
+    }
+  };
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>SOUND LAB</Text>
+      <Text style={styles.gameText}>
+        Reproduce the rhythm. Tap the two surfaces as the pattern plays.
+      </Text>
+
+      <View style={styles.rhythm}>
+        {pattern.map((beat, index) => (
+          <View
+            key={index}
+            style={[
+              styles.beat,
+              input.length > index && styles.beatDone,
+            ]}
+          >
+            <Text style={styles.beatText}>
+              {beat === 0 ? '●' : '◆'}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.row}>
+        <Pressable
+          onPress={() => tap(0)}
+          style={styles.soundPad}
+        >
+          <Text style={styles.padText}>TAP</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => tap(1)}
+          style={styles.soundPad}
+        >
+          <Text style={styles.padText}>CLAP</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.hint}>
+        A repeated pattern is rhythm. Real instruments create these patterns
+        through vibration.
+      </Text>
+    </View>
+  );
+}
+
+function NutritionGame({ onComplete }: { onComplete: () => void }) {
+  const [items, setItems] = useState<string[]>([]);
+
+  const foods = [
+    ['🥕', 'Vegetable'],
+    ['🍎', 'Fruit'],
+    ['🫘', 'Protein'],
+    ['🌾', 'Whole grain'],
+    ['🥤', 'Sugary drink'],
+    ['🍟', 'Fried junk food'],
+  ];
+
+  const choose = (food: string) => {
+    if (items.includes(food)) return;
+
+    const next = [...items, food];
+    setItems(next);
+
+    const good =
+      next.includes('Vegetable') &&
+      next.includes('Fruit') &&
+      next.includes('Protein') &&
+      next.includes('Whole grain');
+
+    if (good) {
+      onComplete();
+    }
+  };
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>BUILD A GOOD MEAL</Text>
+
+      <Text style={styles.gameText}>
+        Create a varied meal. You can also tap foods you would limit rather
+        than make the whole meal from them.
+      </Text>
+
+      <View style={styles.plate}>
+        {items.length === 0 ? (
+          <Text style={styles.emptyLine}>Your plate is empty</Text>
+        ) : (
+          items.map((item) => (
+            <Text key={item} style={styles.plateItem}>
+              {foods.find((food) => food[1] === item)?.[0]} {item}
+            </Text>
+          ))
+        )}
+      </View>
+
+      <View style={styles.foodGrid}>
+        {foods.map(([emoji, name]) => (
+          <Pressable
+            key={name}
+            onPress={() => choose(name)}
+            style={[
+              styles.foodCard,
+              items.includes(name) && styles.foodSelected,
+            ]}
+          >
+            <Text style={styles.foodEmoji}>{emoji}</Text>
+            <Text style={styles.foodName}>{name}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function HumanityGame({ onComplete }: { onComplete: () => void }) {
+  const [resources, setResources] = useState({
+    water: false,
+    food: false,
+    communication: false,
+    helper: false,
+  });
+
+  const choose = (key: keyof typeof resources) => {
+    const next = { ...resources, [key]: true };
+    setResources(next);
+
+    if (
+      next.water &&
+      next.food &&
+      next.communication &&
+      next.helper
+    ) {
+      onComplete();
+    }
+  };
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>COMMUNITY RESCUE</Text>
+
+      <Text style={styles.gameText}>
+        A neighbourhood needs help. Build a response by considering people,
+        supplies and communication.
+      </Text>
+
+      {[
+        ['water', '💧 Water'],
+        ['food', '🥫 Food'],
+        ['communication', '📢 Communication'],
+        ['helper', '🤝 A helper'],
+      ].map(([key, label]) => (
+        <GameButton
+          key={key}
+          disabled={resources[key as keyof typeof resources]}
+          onPress={() =>
+            choose(key as keyof typeof resources)
+          }
+        >
+          {label}
+        </GameButton>
+      ))}
+
+      <Text style={styles.hint}>
+        Real communities solve problems by coordinating people and resources.
+      </Text>
+    </View>
+  );
+}
+
+function ElectronicsGame({ onComplete }: { onComplete: () => void }) {
+  const [states, setStates] = useState([false, false, false]);
+  const [showCode, setShowCode] = useState(false);
+
+  const toggle = (index: number) => {
+    const next = [...states];
+    next[index] = !next[index];
+    setStates(next);
+
+    if (next.every(Boolean)) {
+      setShowCode(true);
+    }
+  };
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>WATER LOGIC → ELECTRONICS</Text>
+
+      <Text style={styles.gameText}>
+        Think of each pipe as a switch. Open = 1. Blocked = 0.
+      </Text>
+
+      <View style={styles.pipeArea}>
+        {[0, 1, 2].map((index) => (
+          <Pressable
+            key={index}
+            onPress={() => toggle(index)}
+            style={[
+              styles.pipe,
+              states[index] && styles.pipeOpen,
+            ]}
+          >
+            <Text style={styles.pipeText}>
+              {states[index] ? '1  OPEN' : '0  BLOCKED'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.flowText}>
+        {states.every(Boolean)
+          ? '💧 WATER REACHES THE OUTPUT'
+          : '🚫 WATER CANNOT REACH THE OUTPUT'}
+      </Text>
+
+      {showCode && (
+        <View style={styles.codeCard}>
+          <Text style={styles.codeTitle}>
+            Now the same idea enters computing.
+          </Text>
+          <Text style={styles.codeText}>a = 65</Text>
+          <Text style={styles.codeSmall}>
+            Numbers can represent information. 65 is the ASCII code for A.
+          </Text>
+          <GameButton onPress={onComplete}>
+            ENTER CODING
+          </GameButton>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function PhysicsGame({ onComplete }: { onComplete: () => void }) {
+  const [slope, setSlope] = useState(1);
+  const [surface, setSurface] = useState(1);
+
+  const canFinish = slope === 3 && surface === 1;
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>PHYSICS WORKSHOP</Text>
+
+      <Text style={styles.gameText}>
+        Change the ramp and surface. Observe how motion changes.
+      </Text>
+
+      <View style={styles.ramp}>
+        <View
+          style={[
+            styles.rampObject,
+            { transform: [{ translateX: slope * 25 }] },
+          ]}
+        >
+          <Text style={styles.objectEmoji}>⚪</Text>
+        </View>
+        <Text style={styles.rampText}>
+          Ramp steepness: {slope}
+        </Text>
+      </View>
+
+      <Text style={styles.sectionLabel}>Change the ramp</Text>
+
+      <View style={styles.row}>
+        {[1, 2, 3].map((value) => (
+          <Pressable
+            key={value}
+            onPress={() => setSlope(value)}
+            style={[
+              styles.smallButton,
+              slope === value && styles.smallButtonSelected,
+            ]}
+          >
+            <Text style={styles.smallButtonText}>{value}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.sectionLabel}>Surface</Text>
+
+      <View style={styles.row}>
+        <Pressable
+          onPress={() => setSurface(1)}
+          style={[
+            styles.smallButton,
+            surface === 1 && styles.smallButtonSelected,
+          ]}
+        >
+          <Text style={styles.smallButtonText}>SMOOTH</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setSurface(2)}
+          style={[
+            styles.smallButton,
+            surface === 2 && styles.smallButtonSelected,
+          ]}
+        >
+          <Text style={styles.smallButtonText}>ROUGH</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.observation}>
+        {surface === 1
+          ? 'The smooth surface offers less resistance.'
+          : 'The rough surface offers more resistance.'}
+      </Text>
+
+      {canFinish && (
+        <GameButton onPress={onComplete}>
+          OBSERVE THE RESULT
+        </GameButton>
+      )}
+    </View>
+  );
+}
+
+function ArtsGame({ onComplete }: { onComplete: () => void }) {
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const structures = [
+    ['○', 'Circle'],
+    ['△', 'Triangle'],
+    ['□', 'Square'],
+    ['▭', 'Rectangle'],
+  ];
+
+  const choose = (name: string) => {
+    const next = selected.includes(name)
+      ? selected
+      : [...selected, name];
+
+    setSelected(next);
+
+    if (
+      next.includes('Circle') &&
+      next.includes('Triangle') &&
+      next.includes('Square')
+    ) {
+      onComplete();
+    }
+  };
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>ARTS DESIGN STUDIO</Text>
+
+      <Text style={styles.gameText}>
+        Look at a drawing as structures. Choose the forms you could combine
+        to construct it.
+      </Text>
+
+      <View style={styles.drawingPreview}>
+        <Text style={styles.houseRoof}>△</Text>
+        <Text style={styles.houseBody}>□</Text>
+        <Text style={styles.houseDoor}>▯</Text>
+        <Text style={styles.sun}>○</Text>
+      </View>
+
+      <Text style={styles.hint}>
+        This house is not just one picture. It is a collection of structures.
+      </Text>
+
+      <View style={styles.shapeGrid}>
+        {structures.map(([shape, name]) => (
+          <Pressable
+            key={name}
+            onPress={() => choose(name)}
+            style={[
+              styles.shapeCard,
+              selected.includes(name) && styles.shapeSelected,
+            ]}
+          >
+            <Text style={styles.shapeSymbol}>{shape}</Text>
+            <Text style={styles.shapeName}>{name}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.hint}>
+        Next step: draw the same structures yourself on paper.
+      </Text>
+    </View>
+  );
+}
+
+function NatureGame({ onComplete }: { onComplete: () => void }) {
+  const [links, setLinks] = useState<string[]>([]);
+
+  const organisms = [
+    ['☀️', 'Sun'],
+    ['🌱', 'Plant'],
+    ['🐛', 'Insect'],
+    ['🐦', 'Bird'],
+    ['💧', 'Water'],
+  ];
+
+  const choose = (name: string) => {
+    const next = links.includes(name)
+      ? links
+      : [...links, name];
+
+    setLinks(next);
+
+    if (
+      next.includes('Sun') &&
+      next.includes('Plant') &&
+      next.includes('Insect') &&
+      next.includes('Bird') &&
+      next.includes('Water')
+    ) {
+      onComplete();
+    }
+  };
+
+  return (
+    <View style={styles.gameBox}>
+      <Text style={styles.gameTitle}>ECOSYSTEM EXPLORER</Text>
+
+      <Text style={styles.gameText}>
+        An ecosystem is a network of relationships. Connect the pieces needed
+        to understand this small ecosystem.
+      </Text>
+
+      {organisms.map(([emoji, name]) => (
+        <Pressable
+          key={name}
+          onPress={() => choose(name)}
+          style={[
+            styles.ecoCard,
+            links.includes(name) && styles.ecoSelected,
+          ]}
+        >
+          <Text style={styles.ecoEmoji}>{emoji}</Text>
+          <Text style={styles.ecoName}>{name}</Text>
+          <Text style={styles.ecoMark}>
+            {links.includes(name) ? '✓ observed' : 'tap to observe'}
+          </Text>
+        </Pressable>
+      ))}
+
+      <Text style={styles.hint}>
+        Sun → plants → animals is one simplified pathway. Real ecosystems
+        contain many interconnected relationships.
+      </Text>
+    </View>
+  );
+}
+
+function GameArea({
+  subject,
+  onComplete,
+}: {
+  subject: string;
+  onComplete: () => void;
+}) {
+  switch (subject) {
+    case 'vedic':
+      return <NikhilamGame onComplete={onComplete} />;
+    case 'manufacturing':
+      return <ManufacturingGame onComplete={onComplete} />;
+    case 'music':
+      return <MusicGame onComplete={onComplete} />;
+    case 'nutrition':
+      return <NutritionGame onComplete={onComplete} />;
+    case 'humanity':
+      return <HumanityGame onComplete={onComplete} />;
+    case 'electronics':
+      return <ElectronicsGame onComplete={onComplete} />;
+    case 'physics':
+      return <PhysicsGame onComplete={onComplete} />;
+    case 'arts':
+      return <ArtsGame onComplete={onComplete} />;
+    case 'nature':
+      return <NatureGame onComplete={onComplete} />;
+    default:
+      return null;
+  }
+}
+
+export default function SubjectGameScreen() {
+  const params = useLocalSearchParams<{ subject?: string }>();
+  const router = useRouter();
+
+  const subject =
+    typeof params.subject === 'string'
+      ? params.subject
+      : 'vedic';
+
+  const world = WORLDS[subject] ?? WORLDS.vedic;
+
+  const [levelIndex, setLevelIndex] = useState(0);
+  const [showGuide, setShowGuide] = useState(false);
+  const [completed, setCompleted] = useState(false);
+  const [missionDone, setMissionDone] = useState(false);
+  const [collected, setCollected] = useState<string[]>([]);
+
+  const level = world.levels[levelIndex];
+
+  useEffect(() => {
+    let mounted = true;
+
+    getCollectedStars().then((stars) => {
+      if (mounted) {
+        setCollected(stars.map((star) => star.id));
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const starId = level.id;
+
+  const isCollected = useMemo(
+    () => collected.includes(starId),
+    [collected, starId],
+  );
+
+  const finishGame = () => {
+    setCompleted(true);
+    setMissionDone(false);
+  };
+
+  const completeMission = async () => {
+    await collectStar({
+      id: starId,
+      subject,
+      level: levelIndex + 1,
+      title: level.title,
+    });
+
+    setCollected((previous) =>
+      previous.includes(starId)
+        ? previous
+        : [...previous, starId],
+    );
+
+    setMissionDone(true);
+  };
+
+  const nextLevel = () => {
+    if (levelIndex < world.levels.length - 1) {
+      setLevelIndex(levelIndex + 1);
+      setCompleted(false);
+      setMissionDone(false);
+      setShowGuide(false);
+    }
+  };
+
+  const previousLevel = () => {
+    if (levelIndex > 0) {
+      setLevelIndex(levelIndex - 1);
+      setCompleted(false);
+      setMissionDone(false);
+      setShowGuide(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerShown: false,
+          animation: 'fade',
+        }}
+      />
+
+      <View style={styles.backgroundGlowOne} />
+      <View style={styles.backgroundGlowTwo} />
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.spaceButton}
+          >
+            <Text style={styles.spaceButtonText}>
+              ✦ BACK TO SPACE
+            </Text>
+          </Pressable>
+
+          <Text style={styles.levelCounter}>
+            {levelIndex + 1} / {world.levels.length}
+          </Text>
+        </View>
+
+        <View style={styles.hero}>
+          <Text style={styles.subjectIcon}>{world.icon}</Text>
+          <Text style={styles.subjectTitle}>{world.title}</Text>
+          <Text style={styles.subjectDescription}>
+            {world.description}
+          </Text>
+        </View>
+
+        <View style={styles.levelRow}>
+          {world.levels.map((item, index) => {
+            const itemCollected = collected.includes(item.id);
+
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => {
+                  setLevelIndex(index);
+                  setCompleted(false);
+                  setMissionDone(false);
+                }}
+                style={[
+                  styles.levelOrb,
+                  index === levelIndex && styles.levelOrbActive,
+                ]}
+              >
+                <Text style={styles.levelOrbText}>
+                  {itemCollected ? '★' : '☆'}
+                </Text>
+                <Text style={styles.levelOrbNumber}>
+                  {index + 1}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.titleCard}>
+          <Text style={styles.levelLabel}>DISCOVERY {levelIndex + 1}</Text>
+          <Text style={styles.levelTitle}>{level.title}</Text>
+        </View>
+
+        {showGuide && (
+          <View style={styles.guideCard}>
+            <Text style={styles.guideLabel}>GUIDE</Text>
+            <Text style={styles.guideText}>{level.guide}</Text>
+          </View>
+        )}
+
+        {!completed ? (
+          <GameArea
+            subject={subject}
+            onComplete={finishGame}
+          />
+        ) : !missionDone ? (
+          <View style={styles.missionCard}>
+            <Text style={styles.missionIcon}>🌍</Text>
+            <Text style={styles.missionTitle}>
+              TAKE IT OUTSIDE
+            </Text>
+
+            <Text style={styles.missionText}>
+              {level.mission}
+            </Text>
+
+            <Text style={styles.missionSmall}>
+              The digital game introduced the idea. Now connect it to
+              something real.
+            </Text>
+
+            <GameButton onPress={completeMission}>
+              I EXPLORED IT
+            </GameButton>
+          </View>
+        ) : (
+          <View style={styles.starCard}>
+            <Text style={styles.starSymbol}>★</Text>
+            <Text style={styles.starTitle}>
+              STAR DISCOVERED
+            </Text>
+
+            <Text style={styles.starText}>
+              {level.title} is now part of your constellation.
+            </Text>
+
+            {levelIndex < world.levels.length - 1 ? (
+              <GameButton onPress={nextLevel}>
+                NEXT DISCOVERY
+              </GameButton>
+            ) : (
+              <GameButton onPress={() => router.back()}>
+                ✦ RETURN TO SPACE
+              </GameButton>
+            )}
+          </View>
+        )}
+
+        <View style={styles.bottomBar}>
+          <Pressable
+            disabled={levelIndex === 0}
+            onPress={previousLevel}
+            style={[
+              styles.navButton,
+              levelIndex === 0 && styles.navDisabled,
+            ]}
+          >
+            <Text style={styles.navText}>← Previous</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setShowGuide((value) => !value)}
+            style={styles.navButton}
+          >
+            <Text style={styles.navText}>
+              {showGuide ? 'Hide Guide' : 'Guide'}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            disabled={levelIndex === world.levels.length - 1}
+            onPress={nextLevel}
+            style={[
+              styles.navButton,
+              levelIndex === world.levels.length - 1 &&
+                styles.navDisabled,
+            ]}
+          >
+            <Text style={styles.navText}>Next →</Text>
+          </Pressable>
+        </View>
+
+        {isCollected && (
+          <Text style={styles.collectedText}>
+            ★ You already discovered this star.
+          </Text>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#020713',
+  },
+
+  scroll: {
+    paddingHorizontal: 18,
+    paddingTop: 54,
+    paddingBottom: 40,
+    maxWidth: 760,
+    width: '100%',
+    alignSelf: 'center',
+  },
+
+  backgroundGlowOne: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: '#14204d',
+    opacity: 0.35,
+    top: 80,
+    left: -100,
+  },
+
+  backgroundGlowTwo: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#30175a',
+    opacity: 0.28,
+    bottom: 80,
+    right: -80,
+  },
+
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+
+  spaceButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#101a36',
+    borderWidth: 1,
+    borderColor: '#35416b',
+  },
+
+  spaceButtonText: {
+    color: '#dce5ff',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
+  levelCounter: {
+    color: '#8290b8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  hero: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+
+  subjectIcon: {
+    fontSize: 58,
+    marginBottom: 8,
+  },
+
+  subjectTitle: {
+    color: '#ffffff',
+    fontSize: 31,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+
+  subjectDescription: {
+    color: '#aab5d3',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+    maxWidth: 520,
+    lineHeight: 21,
+  },
+
+  levelRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 22,
+  },
+
+  levelOrb: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: '#111a31',
+    borderWidth: 1,
+    borderColor: '#334064',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  levelOrbActive: {
+    borderColor: '#879bff',
+    backgroundColor: '#1c2850',
+  },
+
+  levelOrbText: {
+    color: '#ffe68a',
+    fontSize: 23,
+    lineHeight: 25,
+  },
+
+  levelOrbNumber: {
+    color: '#8f9cbd',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  titleCard: {
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  levelLabel: {
+    color: '#7888b7',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+
+  levelTitle: {
+    color: '#ffffff',
+    fontSize: 26,
+    fontWeight: '900',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+
+  guideCard: {
+    backgroundColor: '#0d1630',
+    borderWidth: 1,
+    borderColor: '#2e3b63',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+  },
+
+  guideLabel: {
+    color: '#9aabff',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    marginBottom: 7,
+  },
+
+  guideText: {
+    color: '#d6ddf1',
+    fontSize: 15,
+    lineHeight: 23,
+  },
+
+  gameBox: {
+    backgroundColor: '#0a1228',
+    borderWidth: 1,
+    borderColor: '#29365d',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 18,
+  },
+
+  gameTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+
+  gameText: {
+    color: '#bdc8e3',
+    fontSize: 15,
+    lineHeight: 23,
+    marginBottom: 18,
+  },
+
+  numberCard: {
+    backgroundColor: '#131f42',
+    borderRadius: 18,
+    paddingVertical: 28,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+
+  bigNumber: {
+    color: '#ffffff',
+    fontSize: 34,
+    fontWeight: '900',
+  },
+
+  formula: {
+    color: '#a9b9ff',
+    textAlign: 'center',
+    lineHeight: 23,
+    marginBottom: 10,
+  },
+
+  hint: {
+    color: '#8795b8',
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+
+  button: {
+    minHeight: 48,
+    borderRadius: 15,
+    backgroundColor: '#26386e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+
+  buttonDisabled: {
+    opacity: 0.35,
+  },
+
+  buttonPressed: {
+    opacity: 0.75,
+  },
+
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+
+  progressText: {
+    color: '#7888ae',
+    textAlign: 'center',
+    marginTop: 14,
+    fontSize: 12,
+  },
+
+  factoryLine: {
+    minHeight: 90,
+    borderRadius: 16,
+    backgroundColor: '#111b35',
+    borderWidth: 1,
+    borderColor: '#293961',
+    padding: 10,
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+
+  emptyLine: {
+    color: '#667596',
+    textAlign: 'center',
+  },
+
+  factoryPart: {
+    backgroundColor: '#263866',
+    borderRadius: 10,
+    padding: 9,
+    marginVertical: 3,
+  },
+
+  factoryPartText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  rhythm: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+
+  beat: {
+    width: 45,
+    height: 45,
+    borderRadius: 12,
+    backgroundColor: '#141f3e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2d3b62',
+  },
+
+  beatDone: {
+    backgroundColor: '#293c74',
+    borderColor: '#7188d7',
+  },
+
+  beatText: {
+    color: '#ffffff',
+    fontSize: 18,
+  },
+
+  row: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+  },
+
+  soundPad: {
+    minWidth: 120,
+    minHeight: 72,
+    borderRadius: 18,
+    backgroundColor: '#26345d',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  padText: {
+    color: '#ffffff',
+    fontWeight: '900',
+  },
+
+  plate: {
+    minHeight: 120,
+    borderRadius: 70,
+    backgroundColor: '#151f38',
+    borderWidth: 2,
+    borderColor: '#39496f',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    marginBottom: 16,
+  },
+
+  plateItem: {
+    color: '#e7edff',
+    fontSize: 14,
+    marginVertical: 2,
+  },
+
+  foodGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+  },
+
+  foodCard: {
+    width: 105,
+    minHeight: 95,
+    borderRadius: 15,
+    backgroundColor: '#111a31',
+    borderWidth: 1,
+    borderColor: '#2b385e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+  },
+
+  foodSelected: {
+    borderColor: '#8da1ff',
+    backgroundColor: '#1d2b50',
+  },
+
+  foodEmoji: {
+    fontSize: 28,
+  },
+
+  foodName: {
+    color: '#c7d0e6',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 5,
+  },
+
+  pipeArea: {
+    gap: 10,
+    marginBottom: 16,
+  },
+
+  pipe: {
+    minHeight: 58,
+    borderRadius: 14,
+    backgroundColor: '#20182d',
+    borderWidth: 2,
+    borderColor: '#70466c',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  pipeOpen: {
+    backgroundColor: '#163a39',
+    borderColor: '#4caa91',
+  },
+
+  pipeText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  flowText: {
+    color: '#d8e1f6',
+    textAlign: 'center',
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+
+  codeCard: {
+    backgroundColor: '#0b1728',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#31566a',
+    padding: 16,
+    marginTop: 16,
+  },
+
+  codeTitle: {
+    color: '#b9d9e5',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+
+  codeText: {
+    color: '#ffffff',
+    fontSize: 27,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    marginVertical: 12,
+  },
+
+  codeSmall: {
+    color: '#8299a7',
+    fontSize: 12,
+    lineHeight: 19,
+  },
+
+  ramp: {
+    height: 150,
+    borderRadius: 18,
+    backgroundColor: '#131e38',
+    justifyContent: 'flex-end',
+    padding: 18,
+    overflow: 'hidden',
+  },
+
+  rampObject: {
+    alignItems: 'flex-start',
+  },
+
+  objectEmoji: {
+    fontSize: 34,
+  },
+
+  rampText: {
+    color: '#8e9fbe',
+    fontSize: 12,
+    marginTop: 10,
+  },
+
+  sectionLabel: {
+    color: '#b8c4de',
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+
+  smallButton: {
+    minHeight: 44,
+    minWidth: 70,
+    borderRadius: 12,
+    backgroundColor: '#121d38',
+    borderWidth: 1,
+    borderColor: '#304064',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+
+  smallButtonSelected: {
+    backgroundColor: '#293b6d',
+    borderColor: '#879cff',
+  },
+
+  smallButtonText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+
+  observation: {
+    color: '#c6d0e7',
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 21,
+  },
+
+  drawingPreview: {
+    height: 180,
+    borderRadius: 20,
+    backgroundColor: '#151c32',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+
+  houseRoof: {
+    color: '#ffcf78',
+    fontSize: 90,
+    position: 'absolute',
+    top: 12,
+  },
+
+  houseBody: {
+    color: '#90aaff',
+    fontSize: 100,
+    position: 'absolute',
+    top: 57,
+  },
+
+  houseDoor: {
+    color: '#ffffff',
+    fontSize: 40,
+    position: 'absolute',
+    top: 95,
+  },
+
+  sun: {
+    color: '#ffe08b',
+    fontSize: 44,
+    position: 'absolute',
+    right: 40,
+    top: 20,
+  },
+
+  shapeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 15,
+  },
+
+  shapeCard: {
+    width: 110,
+    height: 100,
+    borderRadius: 16,
+    backgroundColor: '#111a31',
+    borderWidth: 1,
+    borderColor: '#2e3c63',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  shapeSelected: {
+    backgroundColor: '#202f57',
+    borderColor: '#879cff',
+  },
+
+  shapeSymbol: {
+    color: '#ffffff',
+    fontSize: 42,
+  },
+
+  shapeName: {
+    color: '#aab6d2',
+    fontSize: 11,
+    marginTop: 5,
+  },
+
+  ecoCard: {
+    minHeight: 58,
+    borderRadius: 15,
+    backgroundColor: '#111a30',
+    borderWidth: 1,
+    borderColor: '#2b3b5c',
+    marginVertical: 5,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  ecoSelected: {
+    backgroundColor: '#17352f',
+    borderColor: '#4d9f83',
+  },
+
+  ecoEmoji: {
+    fontSize: 25,
+    width: 45,
+  },
+
+  ecoName: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+    flex: 1,
+  },
+
+  ecoMark: {
+    color: '#8497b6',
+    fontSize: 11,
+  },
+
+  missionCard: {
+    backgroundColor: '#10243a',
+    borderWidth: 1,
+    borderColor: '#3d6681',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  missionIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+
+  missionTitle: {
+    color: '#ffffff',
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+
+  missionText: {
+    color: '#d3dfed',
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+    marginTop: 15,
+  },
+
+  missionSmall: {
+    color: '#879bb1',
+    fontSize: 12,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+
+  starCard: {
+    backgroundColor: '#15152f',
+    borderWidth: 1,
+    borderColor: '#66558d',
+    borderRadius: 24,
+    padding: 26,
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  starSymbol: {
+    color: '#ffe27c',
+    fontSize: 68,
+    lineHeight: 74,
+  },
+
+  starTitle: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+
+  starText: {
+    color: '#bdc4dd',
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  bottomBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    flexWrap: 'wrap',
+  },
+
+  navButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    backgroundColor: '#101a32',
+    borderWidth: 1,
+    borderColor: '#29385d',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+  },
+
+  navDisabled: {
+    opacity: 0.3,
+  },
+
+  navText: {
+    color: '#b7c3df',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  collectedText: {
+    color: '#d9bd58',
+    textAlign: 'center',
+    fontSize: 11,
+    marginTop: 14,
+  },
+});

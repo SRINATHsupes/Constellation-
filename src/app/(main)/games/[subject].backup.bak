@@ -1,0 +1,1476 @@
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import {
+  Dimensions,
+  PanResponder,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+import { collectStar } from '@/features/stars/star-store';
+
+const { width, height } = Dimensions.get('window');
+
+type GameType =
+  | 'drag'
+  | 'rhythm'
+  | 'physics'
+  | 'drawing'
+  | 'explore';
+
+type Level = {
+  title: string;
+  guide: string;
+  objective: string;
+  gameType: GameType;
+};
+
+type World = {
+  title: string;
+  symbol: string;
+  colors: string[];
+  description: string;
+  levels: Level[];
+};
+
+const WORLDS: Record<string, World> = {
+  vedic: {
+    title: 'Vedic Maths',
+    symbol: '🔢',
+    colors: ['#FFD54A', '#FF9F43', '#8B5CF6'],
+    description: 'Discover patterns that make difficult calculations feel simple.',
+    levels: [
+      {
+        title: 'Nikhilam',
+        guide:
+          'Numbers close to 100 can be multiplied using their distance from 100.',
+        objective: 'Solve the number lock using the pattern.',
+        gameType: 'physics',
+      },
+      {
+        title: 'Ekadhikena',
+        guide:
+          'Look for the number that comes immediately after the important digit.',
+        objective: 'Find the hidden number pattern.',
+        gameType: 'explore',
+      },
+      {
+        title: 'Urdhva Tiryak',
+        guide:
+          'Multiply from top to bottom and across. Imagine the numbers crossing.',
+        objective: 'Build the multiplication pattern.',
+        gameType: 'drawing',
+      },
+    ],
+  },
+
+  manufacturing: {
+    title: 'Manufacturing',
+    symbol: '⚙️',
+    colors: ['#FF9D3D', '#FF4D4D', '#8B5CF6'],
+    description: 'Discover how machines, gears and systems work together.',
+    levels: [
+      {
+        title: 'Connect the Gears',
+        guide:
+          'A gear transfers movement to another gear when their teeth connect.',
+        objective: 'Place the small gear beside the large gear.',
+        gameType: 'drag',
+      },
+      {
+        title: 'Machine Motion',
+        guide:
+          'Machines combine simple movements to create useful work.',
+        objective: 'Activate the machine in the correct sequence.',
+        gameType: 'drag',
+      },
+      {
+        title: 'Build the System',
+        guide:
+          'Different machine parts have different jobs. Together they form a system.',
+        objective: 'Connect the machine parts.',
+        gameType: 'explore',
+      },
+    ],
+  },
+
+  music: {
+    title: 'Music',
+    symbol: '🎵',
+    colors: ['#40E0D0', '#4F8CFF', '#8B5CF6'],
+    description: 'Discover rhythm, sound and melody through play.',
+    levels: [
+      {
+        title: 'Rhythm',
+        guide: 'A rhythm is a pattern of beats. Listen and repeat it.',
+        objective: 'Repeat the rhythm.',
+        gameType: 'rhythm',
+      },
+      {
+        title: 'Sound',
+        guide: 'Sound comes from vibrations travelling through a medium.',
+        objective: 'Create the correct sound pattern.',
+        gameType: 'rhythm',
+      },
+      {
+        title: 'Melody',
+        guide: 'A melody is a sequence of musical notes.',
+        objective: 'Discover the hidden melody.',
+        gameType: 'rhythm',
+      },
+    ],
+  },
+
+  nutrition: {
+    title: 'Nutrition',
+    symbol: '🍎',
+    colors: ['#8EF6D0', '#35D5FF', '#21C77A'],
+    description: 'Discover how food gives our bodies energy and materials.',
+    levels: [
+      {
+        title: 'Food & Energy',
+        guide: 'Different foods provide different kinds of energy and nutrients.',
+        objective: 'Build a balanced plate.',
+        gameType: 'drag',
+      },
+      {
+        title: 'Nutrients',
+        guide:
+          'Proteins, carbohydrates, fats, vitamins and minerals each have different jobs.',
+        objective: 'Place foods where they belong.',
+        gameType: 'explore',
+      },
+      {
+        title: 'The Human Body',
+        guide:
+          'Your body uses nutrients to grow, repair and keep systems working.',
+        objective: 'Discover what the body needs.',
+        gameType: 'explore',
+      },
+    ],
+  },
+
+  humanity: {
+    title: 'Humanity',
+    symbol: '🤝',
+    colors: ['#FF8A65', '#FF4FA3', '#8B5CF6'],
+    description: 'Explore cooperation, empathy and the systems that connect people.',
+    levels: [
+      {
+        title: 'Helping Hands',
+        guide:
+          'Small actions can change what happens to people around us.',
+        objective: 'Explore the situation and help.',
+        gameType: 'explore',
+      },
+      {
+        title: 'Working Together',
+        guide:
+          'People can combine different skills to solve problems.',
+        objective: 'Build a team solution.',
+        gameType: 'drag',
+      },
+      {
+        title: 'Our World',
+        guide:
+          'Human communities are connected through resources, ideas and cooperation.',
+        objective: 'Discover the connections.',
+        gameType: 'explore',
+      },
+    ],
+  },
+
+  electronics: {
+    title: 'Electronics',
+    symbol: '⚡',
+    colors: ['#A855F7', '#4169FF', '#20E0FF'],
+    description: 'Build circuits and discover how electronic systems work.',
+    levels: [
+      {
+        title: 'Components',
+        guide:
+          'A circuit can contain components such as batteries, switches and lights.',
+        objective: 'Place the components into the circuit.',
+        gameType: 'drag',
+      },
+      {
+        title: 'Circuits',
+        guide:
+          'Electric current needs a complete path to travel around a circuit.',
+        objective: 'Connect the battery, switch and bulb.',
+        gameType: 'drag',
+      },
+      {
+        title: 'Sensors',
+        guide:
+          'Sensors detect changes in the world and turn them into signals.',
+        objective: 'Discover what the sensor detects.',
+        gameType: 'explore',
+      },
+    ],
+  },
+
+  physics: {
+    title: 'Physics',
+    symbol: '🔵',
+    colors: ['#4A8DFF', '#22D3EE', '#8B5CF6'],
+    description: 'Experiment with motion, forces and energy.',
+    levels: [
+      {
+        title: 'Motion',
+        guide:
+          'Objects change position when they move. Push harder and their motion can change.',
+        objective: 'Push the object toward the target.',
+        gameType: 'physics',
+      },
+      {
+        title: 'Forces',
+        guide:
+          'A force can push or pull an object and change its motion.',
+        objective: 'Use the right amount of force.',
+        gameType: 'physics',
+      },
+      {
+        title: 'Energy',
+        guide:
+          'Energy can move between objects and change from one form to another.',
+        objective: 'Guide the energy through the system.',
+        gameType: 'explore',
+      },
+    ],
+  },
+
+  drawing: {
+    title: 'Drawing',
+    symbol: '🎨',
+    colors: ['#FF5DA2', '#D946EF', '#7C3AED'],
+    description: 'Discover shapes, lines and visual expression.',
+    levels: [
+      {
+        title: 'Shapes',
+        guide:
+          'Many drawings can be built from simple shapes such as circles, squares and triangles.',
+        objective: 'Build the hidden shape.',
+        gameType: 'drawing',
+      },
+      {
+        title: 'Lines & Forms',
+        guide:
+          'Lines can describe edges, movement, depth and form.',
+        objective: 'Trace the hidden form.',
+        gameType: 'drawing',
+      },
+      {
+        title: 'Create',
+        guide:
+          'Artists combine shapes, lines and ideas to create something new.',
+        objective: 'Complete your creation.',
+        gameType: 'drawing',
+      },
+    ],
+  },
+
+  nature: {
+    title: 'Nature',
+    symbol: '🌿',
+    colors: ['#45E08B', '#25C6A8', '#4F8CFF'],
+    description: 'Explore relationships between living things and their environment.',
+    levels: [
+      {
+        title: 'The Living World',
+        guide:
+          'Plants, animals, water, soil and air are connected in ecosystems.',
+        objective: 'Find the living connections.',
+        gameType: 'explore',
+      },
+      {
+        title: 'Food Web',
+        guide:
+          'Energy moves between living things through feeding relationships.',
+        objective: 'Connect the food web.',
+        gameType: 'drag',
+      },
+      {
+        title: 'Protect the Ecosystem',
+        guide:
+          'Changing one part of an ecosystem can affect many other parts.',
+        objective: 'Restore the ecosystem.',
+        gameType: 'explore',
+      },
+    ],
+  },
+};
+
+function Glow({
+  size,
+  left,
+  top,
+  opacity = 0.25,
+}: {
+  size: number;
+  left: number;
+  top: number;
+  opacity?: number;
+}) {
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.glow,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          left,
+          top,
+          opacity,
+        },
+      ]}
+    />
+  );
+}
+
+export default function SubjectGameScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ subject?: string }>();
+
+  const subject = String(params.subject ?? 'vedic').toLowerCase();
+
+  const world = WORLDS[subject] ?? WORLDS.vedic;
+
+  const [level, setLevel] = useState(0);
+  const [guideVisible, setGuideVisible] = useState(true);
+  const [completed, setCompleted] = useState(false);
+  const [stars, setStars] = useState<boolean[]>(
+    world.levels.map(() => false),
+  );
+
+  const current = world.levels[level];
+
+  const progress = useMemo(() => {
+    return stars.filter(Boolean).length;
+  }, [stars]);
+
+  const finishLevel = async () => {
+    const starId = `${subject}-${level + 1}`;
+
+    await collectStar({
+      id: starId,
+      subject,
+      level: level + 1,
+      title: current.title,
+    });
+
+    setStars((previous) => {
+      const next = [...previous];
+      next[level] = true;
+      return next;
+    });
+
+    setCompleted(true);
+  };
+
+  const nextLevel = () => {
+    if (level < world.levels.length - 1) {
+      setLevel((previous) => previous + 1);
+      setCompleted(false);
+      setGuideVisible(true);
+    }
+  };
+
+  const previousLevel = () => {
+    if (level > 0) {
+      setLevel((previous) => previous - 1);
+      setCompleted(false);
+      setGuideVisible(true);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <View style={styles.background}>
+        <Glow size={330} left={-130} top={-80} />
+        <Glow size={300} left={width - 130} top={height * 0.18} />
+        <Glow size={360} left={width * 0.25} top={height * 0.65} />
+
+        <View style={[styles.wall, styles.wallOne]} />
+        <View style={[styles.wall, styles.wallTwo]} />
+        <View style={[styles.wall, styles.wallThree]} />
+      </View>
+
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.topBar}>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backText}>← World</Text>
+          </Pressable>
+
+          <View style={styles.titleBox}>
+            <Text style={styles.symbol}>{world.symbol}</Text>
+            <Text style={styles.worldTitle}>{world.title}</Text>
+          </View>
+
+          <View style={styles.progressBox}>
+            <Text style={styles.progressText}>
+              {progress}/{world.levels.length}
+            </Text>
+            <Text style={styles.starTiny}>⭐</Text>
+          </View>
+        </View>
+
+        <View style={styles.starMap}>
+          {world.levels.map((item, index) => (
+            <Pressable
+              key={item.title}
+              onPress={() => {
+                setLevel(index);
+                setCompleted(false);
+                setGuideVisible(true);
+              }}
+              style={[
+                styles.levelStar,
+                index === level && styles.currentStar,
+              ]}
+            >
+              <Text style={styles.starText}>
+                {stars[index] ? '★' : '☆'}
+              </Text>
+              <Text style={styles.levelNumber}>
+                {index + 1}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.levelLabel}>LEVEL {level + 1}</Text>
+
+          <Text style={styles.levelTitle}>{current.title}</Text>
+
+          <Text style={styles.objective}>
+            {current.objective}
+          </Text>
+
+          {guideVisible && (
+            <View style={styles.guideCard}>
+              <View style={styles.guideHeader}>
+                <Text style={styles.guideIcon}>📖</Text>
+                <Text style={styles.guideTitle}>GUIDE</Text>
+
+                <Pressable
+                  onPress={() => setGuideVisible(false)}
+                  style={styles.closeGuide}
+                >
+                  <Text style={styles.closeText}>×</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.guideText}>
+                {current.guide}
+              </Text>
+
+              <Pressable
+                style={styles.startButton}
+                onPress={() => setGuideVisible(false)}
+              >
+                <Text style={styles.startText}>I'M READY →</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {!guideVisible && !completed && (
+            <GameArea
+              type={current.gameType}
+              onComplete={finishLevel}
+            />
+          )}
+
+          {completed && (
+            <View style={styles.completeCard}>
+              <Text style={styles.bigStar}>★</Text>
+
+              <Text style={styles.completeTitle}>
+                STAR DISCOVERED
+              </Text>
+
+              <Text style={styles.completeText}>
+                You explored {current.title}.
+              </Text>
+
+              <View style={styles.collectedStar}>
+                <Text style={styles.collectedStarText}>
+                  ⭐
+                </Text>
+                <Text style={styles.collectedText}>
+                  Added to your constellation
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.nextButton}
+                onPress={nextLevel}
+              >
+                <Text style={styles.nextText}>
+                  {level < world.levels.length - 1
+                    ? 'NEXT LEVEL →'
+                    : 'RETURN TO WORLD'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </ScrollView>
+
+        <View style={styles.bottomBar}>
+          <Pressable
+            style={[
+              styles.navButton,
+              level === 0 && styles.disabled,
+            ]}
+            disabled={level === 0}
+            onPress={previousLevel}
+          >
+            <Text style={styles.navText}>← Previous</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.guideButton}
+            onPress={() => setGuideVisible(true)}
+          >
+            <Text style={styles.guideButtonText}>📖 Guide</Text>
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.navButton,
+              level === world.levels.length - 1 && styles.disabled,
+            ]}
+            disabled={level === world.levels.length - 1}
+            onPress={nextLevel}
+          >
+            <Text style={styles.navText}>Next →</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+function GameArea({
+  type,
+  onComplete,
+}: {
+  type: GameType;
+  onComplete: () => void;
+}) {
+  if (type === 'drag') {
+    return <DragGame onComplete={onComplete} />;
+  }
+
+  if (type === 'rhythm') {
+    return <RhythmGame onComplete={onComplete} />;
+  }
+
+  if (type === 'physics') {
+    return <PhysicsGame onComplete={onComplete} />;
+  }
+
+  if (type === 'drawing') {
+    return <DrawingGame onComplete={onComplete} />;
+  }
+
+  return <ExploreGame onComplete={onComplete} />;
+}
+
+function DragGame({
+  onComplete,
+}: {
+  onComplete: () => void;
+}) {
+  const [placed, setPlaced] = useState(false);
+
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+
+    onPanResponderRelease: (_, gesture) => {
+      const closeEnough =
+        gesture.moveX > width * 0.35 &&
+        gesture.moveX < width * 0.85 &&
+        gesture.moveY > height * 0.35 &&
+        gesture.moveY < height * 0.75;
+
+      if (closeEnough) {
+        setPlaced(true);
+      }
+    },
+  });
+
+  return (
+    <View style={styles.gameCard}>
+      <Text style={styles.gameHint}>
+        Drag the glowing part into the machine.
+      </Text>
+
+      <View style={styles.machine}>
+        <Text style={styles.machineText}>⚙️</Text>
+        <Text style={styles.machineLabel}>
+          MACHINE
+        </Text>
+      </View>
+
+      {!placed ? (
+        <View
+          {...panResponder.panHandlers}
+          style={styles.draggable}
+        >
+          <Text style={styles.dragText}>⚙</Text>
+        </View>
+      ) : (
+        <View style={styles.successObject}>
+          <Text style={styles.dragText}>⚙</Text>
+        </View>
+      )}
+
+      {placed && (
+        <Pressable
+          style={styles.completeButton}
+          onPress={onComplete}
+        >
+          <Text style={styles.completeButtonText}>
+            MACHINE ACTIVATED ✓
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function RhythmGame({
+  onComplete,
+}: {
+  onComplete: () => void;
+}) {
+  const [sequence] = useState([0, 1, 0]);
+  const [input, setInput] = useState<number[]>([]);
+
+  const tap = (value: number) => {
+    const next = [...input, value];
+    setInput(next);
+
+    if (next.length === sequence.length) {
+      const correct = next.every(
+        (item, index) => item === sequence[index],
+      );
+
+      if (correct) {
+        setTimeout(onComplete, 300);
+      } else {
+        setInput([]);
+      }
+    }
+  };
+
+  return (
+    <View style={styles.gameCard}>
+      <Text style={styles.gameHint}>
+        Repeat the rhythm: 🔵 → 🟣 → 🔵
+      </Text>
+
+      <View style={styles.rhythmRow}>
+        <Pressable
+          style={styles.rhythmBlue}
+          onPress={() => tap(0)}
+        >
+          <Text style={styles.rhythmText}>●</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.rhythmPurple}
+          onPress={() => tap(1)}
+        >
+          <Text style={styles.rhythmText}>●</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.rhythmProgress}>
+        {input.length}/3 beats
+      </Text>
+    </View>
+  );
+}
+
+function PhysicsGame({
+  onComplete,
+}: {
+  onComplete: () => void;
+}) {
+  const [force, setForce] = useState(0);
+
+  const hitTarget = force >= 70 && force <= 85;
+
+  return (
+    <View style={styles.gameCard}>
+      <Text style={styles.gameHint}>
+        Experiment with force until the object reaches the target.
+      </Text>
+
+      <View style={styles.physicsTrack}>
+        <View
+          style={[
+            styles.physicsObject,
+            {
+              left: `${Math.min(force, 92)}%`,
+            },
+          ]}
+        >
+          <Text style={styles.physicsObjectText}>●</Text>
+        </View>
+
+        <View style={styles.physicsTarget}>
+          <Text style={styles.physicsTargetText}>◎</Text>
+        </View>
+      </View>
+
+      <View style={styles.forceButtons}>
+        {[20, 40, 60, 75, 90].map((value) => (
+          <Pressable
+            key={value}
+            style={styles.forceButton}
+            onPress={() => setForce(value)}
+          >
+            <Text style={styles.forceText}>{value}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {hitTarget && (
+        <Pressable
+          style={styles.completeButton}
+          onPress={onComplete}
+        >
+          <Text style={styles.completeButtonText}>
+            EXPERIMENT COMPLETE ✓
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function DrawingGame({
+  onComplete,
+}: {
+  onComplete: () => void;
+}) {
+  const [points, setPoints] = useState<number[]>([]);
+
+  const addPoint = (point: number) => {
+    if (!points.includes(point)) {
+      const next = [...points, point];
+      setPoints(next);
+
+      if (next.length === 4) {
+        setTimeout(onComplete, 300);
+      }
+    }
+  };
+
+  return (
+    <View style={styles.gameCard}>
+      <Text style={styles.gameHint}>
+        Connect the four glowing points.
+      </Text>
+
+      <View style={styles.drawingBoard}>
+        {[0, 1, 2, 3].map((point) => (
+          <Pressable
+            key={point}
+            onPress={() => addPoint(point)}
+            style={[
+              styles.drawingPoint,
+              [
+                styles.pointOne,
+                styles.pointTwo,
+                styles.pointThree,
+                styles.pointFour,
+              ][point],
+              points.includes(point) && styles.pointSelected,
+            ]}
+          >
+            <Text style={styles.pointText}>✦</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.rhythmProgress}>
+        {points.length}/4 points
+      </Text>
+    </View>
+  );
+}
+
+function ExploreGame({
+  onComplete,
+}: {
+  onComplete: () => void;
+}) {
+  const [found, setFound] = useState<number[]>([]);
+
+  const discover = (id: number) => {
+    if (!found.includes(id)) {
+      const next = [...found, id];
+      setFound(next);
+
+      if (next.length === 3) {
+        setTimeout(onComplete, 300);
+      }
+    }
+  };
+
+  return (
+    <View style={styles.gameCard}>
+      <Text style={styles.gameHint}>
+        Explore the scene and discover three hidden connections.
+      </Text>
+
+      <View style={styles.exploreScene}>
+        <Pressable
+          style={styles.exploreOne}
+          onPress={() => discover(1)}
+        >
+          <Text style={styles.exploreEmoji}>🌱</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.exploreTwo}
+          onPress={() => discover(2)}
+        >
+          <Text style={styles.exploreEmoji}>💧</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.exploreThree}
+          onPress={() => discover(3)}
+        >
+          <Text style={styles.exploreEmoji}>🦋</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.rhythmProgress}>
+        {found.length}/3 discoveries
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#05051A',
+  },
+
+  background: {
+    ...StyleSheet.absoluteFill,
+    overflow: 'hidden',
+    backgroundColor: '#07052B',
+  },
+
+  glow: {
+    position: 'absolute',
+    backgroundColor: '#7C3AED',
+  },
+
+  wall: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+
+  wallOne: {
+    width: width * 1.4,
+    height: height * 0.55,
+    left: -width * 0.25,
+    top: height * 0.08,
+    backgroundColor: '#142C68',
+    opacity: 0.5,
+  },
+
+  wallTwo: {
+    width: width * 1.2,
+    height: height * 0.5,
+    left: width * 0.35,
+    top: height * 0.45,
+    backgroundColor: '#431B65',
+    opacity: 0.45,
+  },
+
+  wallThree: {
+    width: width,
+    height: height * 0.35,
+    left: -width * 0.2,
+    top: height * 0.68,
+    backgroundColor: '#064B57',
+    opacity: 0.35,
+  },
+
+  safe: {
+    flex: 1,
+  },
+
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+
+  backButton: {
+    padding: 10,
+    minWidth: 80,
+  },
+
+  backText: {
+    color: '#D7D9FF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  titleBox: {
+    flex: 1,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 7,
+  },
+
+  symbol: {
+    fontSize: 24,
+  },
+
+  worldTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+
+  progressBox: {
+    minWidth: 60,
+    alignItems: 'center',
+  },
+
+  progressText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
+  starTiny: {
+    fontSize: 13,
+  },
+
+  starMap: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+
+  levelStar: {
+    width: 62,
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+  },
+
+  currentStar: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+
+  starText: {
+    color: '#FFD84D',
+    fontSize: 29,
+    lineHeight: 31,
+  },
+
+  levelNumber: {
+    color: '#AEB3D5',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 120,
+  },
+
+  levelLabel: {
+    color: '#A9B7FF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+
+  levelTitle: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: 5,
+  },
+
+  objective: {
+    color: '#C5C8E8',
+    textAlign: 'center',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+
+  guideCard: {
+    backgroundColor: 'rgba(17,18,55,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.13)',
+    borderRadius: 28,
+    padding: 22,
+  },
+
+  guideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  guideIcon: {
+    fontSize: 22,
+    marginRight: 9,
+  },
+
+  guideTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 2,
+    flex: 1,
+  },
+
+  closeGuide: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  closeText: {
+    color: '#FFFFFF',
+    fontSize: 23,
+  },
+
+  guideText: {
+    color: '#D8DAF5',
+    fontSize: 17,
+    lineHeight: 26,
+    marginTop: 17,
+  },
+
+  startButton: {
+    marginTop: 22,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 15,
+    borderRadius: 17,
+    alignItems: 'center',
+  },
+
+  startText: {
+    color: '#19163D',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+
+  gameCard: {
+    minHeight: 400,
+    backgroundColor: 'rgba(12,13,43,0.85)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.13)',
+    padding: 20,
+    alignItems: 'center',
+  },
+
+  gameHint: {
+    color: '#D7D9F5',
+    fontSize: 16,
+    lineHeight: 23,
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+
+  machine: {
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: 'rgba(89,65,170,0.35)',
+    borderWidth: 2,
+    borderColor: '#8B6CFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  machineText: {
+    fontSize: 70,
+  },
+
+  machineLabel: {
+    color: '#BDBFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+
+  draggable: {
+    position: 'absolute',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FFB52E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    right: 25,
+    bottom: 80,
+  },
+
+  successObject: {
+    marginTop: 20,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#57E6A5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  dragText: {
+    color: '#FFFFFF',
+    fontSize: 38,
+    fontWeight: '900',
+  },
+
+  completeButton: {
+    marginTop: 25,
+    backgroundColor: '#57E6A5',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderRadius: 17,
+  },
+
+  completeButtonText: {
+    color: '#06271A',
+    fontWeight: '900',
+    fontSize: 12,
+  },
+
+  rhythmRow: {
+    flexDirection: 'row',
+    gap: 25,
+    marginTop: 30,
+  },
+
+  rhythmBlue: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#287DFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  rhythmPurple: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#9B4DFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  rhythmText: {
+    color: '#FFFFFF',
+    fontSize: 55,
+  },
+
+  rhythmProgress: {
+    color: '#B8BCE1',
+    marginTop: 25,
+    fontWeight: '800',
+  },
+
+  physicsTrack: {
+    width: '100%',
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    position: 'relative',
+    justifyContent: 'center',
+  },
+
+  physicsObject: {
+    position: 'absolute',
+  },
+
+  physicsTarget: {
+    position: 'absolute',
+    right: 12,
+  },
+
+  physicsObjectText: {
+    color: '#5EE7FF',
+    fontSize: 35,
+  },
+
+  physicsTargetText: {
+    color: '#FFD84D',
+    fontSize: 42,
+  },
+
+  forceButtons: {
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 30,
+  },
+
+  forceButton: {
+    width: 52,
+    height: 45,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  forceText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
+  drawingBoard: {
+    width: 280,
+    height: 280,
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderRadius: 24,
+    position: 'relative',
+  },
+
+  drawingPoint: {
+    position: 'absolute',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#5D4BFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  pointOne: {
+    left: 25,
+    top: 25,
+  },
+
+  pointTwo: {
+    right: 25,
+    top: 25,
+  },
+
+  pointThree: {
+    right: 25,
+    bottom: 25,
+  },
+
+  pointFour: {
+    left: 25,
+    bottom: 25,
+  },
+
+  pointSelected: {
+    backgroundColor: '#FF55B8',
+    transform: [{ scale: 1.15 }],
+  },
+
+  pointText: {
+    color: '#FFFFFF',
+    fontSize: 25,
+  },
+
+  exploreScene: {
+    width: 290,
+    height: 290,
+    borderRadius: 145,
+    backgroundColor: 'rgba(35,135,120,0.18)',
+    borderWidth: 2,
+    borderColor: 'rgba(86,255,195,0.25)',
+    position: 'relative',
+  },
+
+  exploreOne: {
+    position: 'absolute',
+    left: 35,
+    top: 55,
+    width: 75,
+    height: 75,
+    borderRadius: 38,
+    backgroundColor: 'rgba(65,220,140,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  exploreTwo: {
+    position: 'absolute',
+    right: 35,
+    top: 85,
+    width: 75,
+    height: 75,
+    borderRadius: 38,
+    backgroundColor: 'rgba(45,190,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  exploreThree: {
+    position: 'absolute',
+    left: 105,
+    bottom: 35,
+    width: 75,
+    height: 75,
+    borderRadius: 38,
+    backgroundColor: 'rgba(210,90,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  exploreEmoji: {
+    fontSize: 34,
+  },
+
+  completeCard: {
+    backgroundColor: 'rgba(25,24,66,0.94)',
+    borderRadius: 30,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,216,77,0.35)',
+  },
+
+  bigStar: {
+    color: '#FFD84D',
+    fontSize: 90,
+    lineHeight: 100,
+  },
+
+  completeTitle: {
+    color: '#FFFFFF',
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginTop: 5,
+  },
+
+  completeText: {
+    color: '#C5C8E8',
+    fontSize: 15,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+
+  collectedStar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,216,77,0.10)',
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+    marginTop: 20,
+  },
+
+  collectedStarText: {
+    fontSize: 20,
+  },
+
+  collectedText: {
+    color: '#FFE99A',
+    fontSize: 12,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
+
+  nextButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 17,
+    paddingVertical: 15,
+    paddingHorizontal: 24,
+    marginTop: 20,
+  },
+
+  nextText: {
+    color: '#181638',
+    fontWeight: '900',
+    fontSize: 12,
+    letterSpacing: 1,
+  },
+
+  bottomBar: {
+    position: 'absolute',
+    left: 15,
+    right: 15,
+    bottom: 12,
+    height: 60,
+    borderRadius: 23,
+    backgroundColor: 'rgba(13,13,42,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+
+  navButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+
+  guideButton: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 15,
+  },
+
+  navText: {
+    color: '#D8DBFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  guideButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  disabled: {
+    opacity: 0.3,
+  },
+});

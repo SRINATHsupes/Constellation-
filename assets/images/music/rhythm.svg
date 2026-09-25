@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <rect width="800" height="500" rx="40" fill="#10152b"/>
+  <text x="400" y="70" text-anchor="middle" fill="white" font-size="38" font-family="sans-serif" font-weight="bold">RHYTHM</text>
+
+  <ellipse cx="400" cy="190" rx="130" ry="55" fill="#d99a55"/>
+  <ellipse cx="400" cy="180" rx="130" ry="55" fill="#f0c27b"/>
+  <ellipse cx="400" cy="180" rx="105" ry="40" fill="#c98b4b"/>
+
+  <circle cx="235" cy="345" r="42" fill="#66d9ff"/>
+  <rect x="315" y="303" width="170" height="84" rx="20" fill="#182343" stroke="#8ee7ff" stroke-width="5"/>
+  <circle cx="565" cy="345" r="42" fill="#66d9ff"/>
+
+  <text x="235" y="360" text-anchor="middle" fill="#07111f" font-size="38" font-family="sans-serif" font-weight="bold">•</text>
+  <text x="400" y="360" text-anchor="middle" fill="white" font-size="38" font-family="sans-serif" font-weight="bold">—</text>
+  <text x="565" y="360" text-anchor="middle" fill="#07111f" font-size="38" font-family="sans-serif" font-weight="bold">•</text>
+
+  <text x="400" y="450" text-anchor="middle" fill="#b9c8e8" font-size="24" font-family="sans-serif">Sounds and silences form patterns</text>
+</svg>

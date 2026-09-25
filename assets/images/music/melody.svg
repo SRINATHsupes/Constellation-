@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <rect width="800" height="500" rx="40" fill="#10152b"/>
+  <text x="400" y="70" text-anchor="middle" fill="white" font-size="38" font-family="sans-serif" font-weight="bold">MELODY</text>
+
+  <path d="M120 300 C210 180 270 380 350 250 S500 170 580 280 S670 360 720 210" fill="none" stroke="#66d9ff" stroke-width="7"/>
+
+  <circle cx="150" cy="280" r="25" fill="#8ee7ff"/>
+  <circle cx="270" cy="330" r="25" fill="#8ee7ff"/>
+  <circle cx="370" cy="230" r="25" fill="#8ee7ff"/>
+  <circle cx="500" cy="215" r="25" fill="#8ee7ff"/>
+  <circle cx="610" cy="295" r="25" fill="#8ee7ff"/>
+  <circle cx="705" cy="220" r="25" fill="#8ee7ff"/>
+
+  <text x="150" y="285" text-anchor="middle" fill="#07111f" font-size="18" font-family="sans-serif">C</text>
+  <text x="270" y="335" text-anchor="middle" fill="#07111f" font-size="18" font-family="sans-serif">E</text>
+  <text x="370" y="235" text-anchor="middle" fill="#07111f" font-size="18" font-family="sans-serif">G</text>
+  <text x="500" y="220" text-anchor="middle" fill="#07111f" font-size="18" font-family="sans-serif">E</text>
+  <text x="610" y="300" text-anchor="middle" fill="#07111f" font-size="18" font-family="sans-serif">G</text>
+  <text x="705" y="225" text-anchor="middle" fill="#07111f" font-size="18" font-family="sans-serif">C</text>
+
+  <text x="400" y="450" text-anchor="middle" fill="#b9c8e8" font-size="24" font-family="sans-serif">Notes arranged into a musical idea</text>
+</svg>

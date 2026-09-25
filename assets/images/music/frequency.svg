@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <rect width="800" height="500" rx="40" fill="#10152b"/>
+  <text x="400" y="65" text-anchor="middle" fill="white" font-size="38" font-family="sans-serif" font-weight="bold">FREQUENCY</text>
+
+  <text x="90" y="145" fill="#b9c8e8" font-size="24" font-family="sans-serif">LOW</text>
+  <path d="M180 135 Q230 80 280 135 T380 135 T480 135 T580 135 T680 135" fill="none" stroke="#66d9ff" stroke-width="7"/>
+
+  <text x="90" y="270" fill="#b9c8e8" font-size="24" font-family="sans-serif">MEDIUM</text>
+  <path d="M180 260 Q205 210 230 260 T280 260 T330 260 T380 260 T430 260 T480 260 T530 260 T580 260 T630 260 T680 260" fill="none" stroke="#8ee7ff" stroke-width="7"/>
+
+  <text x="90" y="395" fill="#b9c8e8" font-size="24" font-family="sans-serif">HIGH</text>
+  <path d="M180 385 Q192 345 204 385 T228 385 T252 385 T276 385 T300 385 T324 385 T348 385 T372 385 T396 385 T420 385 T444 385 T468 385 T492 385 T516 385 T540 385 T564 385 T588 385 T612 385 T636 385 T660 385 T684 385" fill="none" stroke="#c5f4ff" stroke-width="7"/>
+</svg>

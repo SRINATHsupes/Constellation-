@@ -1,0 +1,1340 @@
+import { GLView } from 'expo-gl';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import {
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import * as THREE from 'three';
+
+type LessonStar = {
+  id: number;
+  title: string;
+  completed: boolean;
+  position: [number, number, number];
+};
+
+type Subject = {
+  id: string;
+  name: string;
+  position: [number, number, number];
+  color: string;
+};
+
+const LESSON_STARS: LessonStar[] = [
+  {
+    id: 1,
+    title: 'Number Patterns',
+    completed: false,
+    position: [-1.1, 0.7, 0],
+  },
+  {
+    id: 2,
+    title: 'Multiplication',
+    completed: false,
+    position: [-0.5, 1.0, -0.2],
+  },
+  {
+    id: 3,
+    title: 'Division',
+    completed: false,
+    position: [0.1, 0.8, 0.1],
+  },
+  {
+    id: 4,
+    title: 'Mental Calculation',
+    completed: false,
+    position: [0.7, 1.0, -0.3],
+  },
+  {
+    id: 5,
+    title: 'Speed & Tricks',
+    completed: false,
+    position: [1.1, 0.4, 0.2],
+  },
+];
+
+const SUBJECTS: Subject[] = [
+  {
+    id: 'vedic',
+    name: 'VEDIC MATHS',
+    position: [-4.8, 2.7, -1.5],
+    color: '#f5c451',
+  },
+  {
+    id: 'physics',
+    name: 'PHYSICS',
+    position: [0.2, 4.0, -2.0],
+    color: '#5edcff',
+  },
+  {
+    id: 'nutrition',
+    name: 'NUTRITION',
+    position: [4.5, 2.0, -1.0],
+    color: '#69e6bd',
+  },
+  {
+    id: 'electronics',
+    name: 'ELECTRONICS',
+    position: [3.8, -2.7, -0.5],
+    color: '#9b6cff',
+  },
+  {
+    id: 'drawing',
+    name: 'DRAWING',
+    position: [-0.8, -3.7, -1.8],
+    color: '#f36bd8',
+  },
+  {
+    id: 'music',
+    name: 'MUSIC',
+    position: [-4.8, -1.7, -1.0],
+    color: '#6ddcff',
+  },
+  {
+    id: 'manufacturing',
+    name: 'MANUFACTURING',
+    position: [6.0, 0.1, -3.0],
+    color: '#ff784f',
+  },
+  {
+    id: 'escape',
+    name: 'ESCAPE ROOM',
+    position: [-7.0, 4.0, -4.0],
+    color: '#e75c91',
+  },
+];
+
+const BACKGROUND_STAR_COUNT = 900;
+
+function material(
+  color: string,
+  opacity = 0.9,
+) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+  });
+}
+
+function createVedicSymbol() {
+  const group = new THREE.Group();
+
+  const outer = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.95, 1),
+    new THREE.MeshBasicMaterial({
+      color: '#f5c451',
+      wireframe: true,
+      transparent: true,
+      opacity: 0.95,
+    }),
+  );
+
+  const inner = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.58, 1),
+    new THREE.MeshBasicMaterial({
+      color: '#a66cff',
+      wireframe: true,
+      transparent: true,
+      opacity: 0.9,
+    }),
+  );
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(1.05, 0.025, 8, 64),
+    material('#ffcf5a', 0.8),
+  );
+
+  const ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(0.72, 0.018, 8, 64),
+    material('#9d70ff', 0.75),
+  );
+
+  ring.rotation.x = Math.PI / 2;
+  ring2.rotation.y = Math.PI / 2;
+
+  group.add(outer, inner, ring, ring2);
+
+  return group;
+}
+
+function createPhysicsSymbol() {
+  const group = new THREE.Group();
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 16, 16),
+    material('#7eeaff'),
+  );
+
+  group.add(core);
+
+  const directions = [
+    [1, 0.3, 0],
+    [-1, -0.2, 0.2],
+    [0.2, 1, -0.2],
+    [0, -1, 0.3],
+  ];
+
+  directions.forEach(([x, y, z]) => {
+    const arrow = new THREE.ArrowHelper(
+      new THREE.Vector3(x, y, z).normalize(),
+      new THREE.Vector3(0, 0, 0),
+      1.05,
+      '#55cfff',
+      0.18,
+      0.08,
+    );
+
+    group.add(arrow);
+  });
+
+  const orbit = new THREE.Mesh(
+    new THREE.TorusGeometry(0.75, 0.018, 8, 64),
+    material('#8c72ff', 0.7),
+  );
+
+  orbit.rotation.x = Math.PI / 2;
+  group.add(orbit);
+
+  return group;
+}
+
+function createNutritionSymbol() {
+  const group = new THREE.Group();
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.34, 16, 16),
+    material('#65e5bc', 0.9),
+  );
+
+  group.add(core);
+
+  const positions = [
+    [0.85, 0, 0],
+    [-0.85, 0, 0],
+    [0, 0.85, 0],
+    [0, -0.85, 0],
+    [0, 0, 0.85],
+    [0, 0, -0.85],
+  ];
+
+  positions.forEach(([x, y, z]) => {
+    const atom = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 12, 12),
+      material('#7fffe0', 0.85),
+    );
+
+    atom.position.set(x, y, z);
+    group.add(atom);
+
+    const direction = new THREE.Vector3(x, y, z);
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        direction,
+      ]),
+      new THREE.LineBasicMaterial({
+        color: '#37cfa5',
+        transparent: true,
+        opacity: 0.6,
+      }),
+    );
+
+    group.add(line);
+  });
+
+  return group;
+}
+
+function createElectronicsSymbol() {
+  const group = new THREE.Group();
+
+  const board = new THREE.Mesh(
+    new THREE.BoxGeometry(1.55, 1.05, 0.08),
+    material('#7255d8', 0.85),
+  );
+
+  const chip = new THREE.Mesh(
+    new THREE.BoxGeometry(0.55, 0.48, 0.14),
+    material('#39cfff', 0.95),
+  );
+
+  chip.position.z = 0.12;
+
+  group.add(board, chip);
+
+  const traceMaterial = new THREE.LineBasicMaterial({
+    color: '#62eaff',
+    transparent: true,
+    opacity: 0.9,
+  });
+
+  const traces = [
+    [-0.65, 0.35, 0.7, 0.35],
+    [-0.65, 0.1, 0.45, 0.1],
+    [-0.65, -0.25, 0.7, -0.25],
+    [0.7, 0.3, 0.95, 0.3],
+    [0.7, -0.25, 0.95, -0.25],
+  ];
+
+  traces.forEach(([x1, y1, x2, y2]) => {
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x1, y1, 0.16),
+        new THREE.Vector3(x2, y2, 0.16),
+      ]),
+      traceMaterial,
+    );
+
+    group.add(line);
+  });
+
+  return group;
+}
+
+function createDrawingSymbol() {
+  const group = new THREE.Group();
+
+  const canvas = new THREE.Mesh(
+    new THREE.BoxGeometry(1.55, 1.05, 0.06),
+    material('#d94fc3', 0.32),
+  );
+
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(1.7, 1.2, 0.025),
+    new THREE.MeshBasicMaterial({
+      color: '#ef75db',
+      wireframe: true,
+      transparent: true,
+      opacity: 0.8,
+    }),
+  );
+
+  const shape = new THREE.Mesh(
+    new THREE.TetrahedronGeometry(0.55, 0),
+    new THREE.MeshBasicMaterial({
+      color: '#a66cff',
+      wireframe: true,
+      transparent: true,
+      opacity: 0.95,
+    }),
+  );
+
+  shape.position.z = 0.2;
+
+  group.add(canvas, frame, shape);
+
+  return group;
+}
+
+function createMusicSymbol() {
+  const group = new THREE.Group();
+
+  const points: THREE.Vector3[] = [];
+
+  for (let i = 0; i <= 48; i++) {
+    const x = (i / 48) * 2.5 - 1.25;
+    const y = Math.sin(i * 0.45) * 0.38;
+    points.push(new THREE.Vector3(x, y, 0));
+  }
+
+  const wave = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({
+      color: '#66dcff',
+      transparent: true,
+      opacity: 0.95,
+    }),
+  );
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.72, 0.025, 8, 64),
+    material('#805cff', 0.7),
+  );
+
+  ring.rotation.x = Math.PI / 2;
+
+  group.add(wave, ring);
+
+  return group;
+}
+
+function createGear(
+  radius: number,
+  color: string,
+) {
+  const group = new THREE.Group();
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(
+      radius,
+      0.13,
+      8,
+      12,
+    ),
+    material(color, 0.9),
+  );
+
+  const center = new THREE.Mesh(
+    new THREE.CylinderGeometry(
+      radius * 0.28,
+      radius * 0.28,
+      0.12,
+      12,
+    ),
+    material('#8e55ff', 0.8),
+  );
+
+  center.rotation.x = Math.PI / 2;
+
+  group.add(ring, center);
+
+  for (let i = 0; i < 12; i++) {
+    const tooth = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.3, 0.1),
+      material(color, 0.85),
+    );
+
+    const angle = (i / 12) * Math.PI * 2;
+
+    tooth.position.x =
+      Math.cos(angle) * radius;
+
+    tooth.position.y =
+      Math.sin(angle) * radius;
+
+    tooth.rotation.z = angle;
+
+    group.add(tooth);
+  }
+
+  return group;
+}
+
+function createManufacturingSymbol() {
+  const group = new THREE.Group();
+
+  const gear1 = createGear(0.62, '#ff8b55');
+  const gear2 = createGear(0.42, '#e95c72');
+
+  gear1.position.set(-0.42, 0.18, 0);
+  gear2.position.set(0.48, -0.2, 0);
+
+  group.add(gear1, gear2);
+
+  return group;
+}
+
+function createEscapeSymbol() {
+  const group = new THREE.Group();
+
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(1.15, 1.65, 0.12),
+    material('#d64e79', 0.82),
+  );
+
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 1.9, 0.05),
+    new THREE.MeshBasicMaterial({
+      color: '#865cff',
+      wireframe: true,
+      transparent: true,
+      opacity: 0.85,
+    }),
+  );
+
+  const lock = new THREE.Mesh(
+    new THREE.TorusGeometry(0.16, 0.045, 8, 24),
+    material('#6ad8ff', 0.95),
+  );
+
+  lock.position.set(0.25, 0, 0.13);
+
+  group.add(door, frame, lock);
+
+  return group;
+}
+
+function createSubjectShape(
+  subject: Subject,
+) {
+  switch (subject.id) {
+    case 'vedic':
+      return createVedicSymbol();
+
+    case 'physics':
+      return createPhysicsSymbol();
+
+    case 'nutrition':
+      return createNutritionSymbol();
+
+    case 'electronics':
+      return createElectronicsSymbol();
+
+    case 'drawing':
+      return createDrawingSymbol();
+
+    case 'music':
+      return createMusicSymbol();
+
+    case 'manufacturing':
+      return createManufacturingSymbol();
+
+    case 'escape':
+      return createEscapeSymbol();
+
+    default:
+      return new THREE.Group();
+  }
+}
+
+function createBackgroundStars() {
+  const positions = new Float32Array(
+    BACKGROUND_STAR_COUNT * 3,
+  );
+
+  for (
+    let i = 0;
+    i < BACKGROUND_STAR_COUNT;
+    i++
+  ) {
+    const radius =
+      10 + Math.random() * 25;
+
+    const theta =
+      Math.random() * Math.PI * 2;
+
+    const phi =
+      Math.acos(
+        2 * Math.random() - 1,
+      );
+
+    positions[i * 3] =
+      radius *
+      Math.sin(phi) *
+      Math.cos(theta);
+
+    positions[i * 3 + 1] =
+      radius *
+      Math.sin(phi) *
+      Math.sin(theta);
+
+    positions[i * 3 + 2] =
+      radius * Math.cos(phi);
+  }
+
+  return positions;
+}
+
+export function ConstellationUniverse3D() {
+  const router = useRouter();
+
+  const cameraRef =
+    useRef<THREE.PerspectiveCamera | null>(
+      null,
+    );
+
+  const rendererRef =
+    useRef<THREE.WebGLRenderer | null>(
+      null,
+    );
+
+  const animationRef =
+    useRef<number | null>(null);
+
+  const universeRef =
+    useRef<THREE.Group | null>(null);
+
+  const interactiveObjectsRef =
+    useRef<THREE.Object3D[]>([]);
+
+  const viewportRef =
+    useRef({
+      width: 1,
+      height: 1,
+    });
+
+  const lastTouchRef =
+    useRef<{
+      x: number;
+      y: number;
+    } | null>(null);
+
+  const touchStartRef =
+    useRef<{
+      x: number;
+      y: number;
+    } | null>(null);
+
+  const rotationRef =
+    useRef({
+      x: 0,
+      y: 0,
+    });
+
+  const [selectedStar, setSelectedStar] =
+    useState<LessonStar | null>(
+      LESSON_STARS[0],
+    );
+
+  const openLesson = () => {
+    if (!selectedStar) {
+      return;
+    }
+
+    router.push(
+      `/lesson?title=${encodeURIComponent(
+        selectedStar.title,
+      )}` as any,
+    );
+  };
+
+  const selectObject = (
+    pageX: number,
+    pageY: number,
+  ) => {
+    const camera = cameraRef.current;
+
+    if (!camera) {
+      return;
+    }
+
+    const width =
+      viewportRef.current.width;
+
+    const height =
+      viewportRef.current.height;
+
+    const pointer =
+      new THREE.Vector2(
+        (pageX / width) * 2 - 1,
+        -(pageY / height) * 2 + 1,
+      );
+
+    const raycaster =
+      new THREE.Raycaster();
+
+    raycaster.setFromCamera(
+      pointer,
+      camera,
+    );
+
+    const hits =
+      raycaster.intersectObjects(
+        interactiveObjectsRef.current,
+        true,
+      );
+
+    if (hits.length === 0) {
+      return;
+    }
+
+    let object:
+      | THREE.Object3D
+      | null =
+      hits[0].object;
+
+    while (
+      object &&
+      !object.userData.subjectId
+    ) {
+      object = object.parent;
+    }
+
+    if (
+      !object ||
+      !object.userData.subjectId
+    ) {
+      return;
+    }
+
+    const subject =
+      SUBJECTS.find(
+        (item) =>
+          item.id ===
+          object?.userData.subjectId,
+      );
+
+    if (!subject) {
+      return;
+    }
+
+    if (subject.id === 'vedic') {
+      router.push(
+        '/curiosity/vedic/nikhilam' as any,
+      );
+      return;
+    }
+
+    if (subject.id === 'rocket') {
+      router.push(
+        '/curiosity/rocket' as any,
+      );
+      return;
+    }
+
+    console.log(
+      `Selected subject: ${subject.name}`,
+    );
+
+    setSelectedStar({
+      ...LESSON_STARS[
+        SUBJECTS.indexOf(subject) %
+          LESSON_STARS.length
+      ],
+      title: subject.name,
+    });
+  };
+
+  const panResponder =
+    useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder:
+          () => true,
+
+        onMoveShouldSetPanResponder:
+          () => true,
+
+        onPanResponderGrant: (
+          event,
+        ) => {
+          const x =
+            event.nativeEvent.pageX;
+
+          const y =
+            event.nativeEvent.pageY;
+
+          lastTouchRef.current = {
+            x,
+            y,
+          };
+
+          touchStartRef.current = {
+            x,
+            y,
+          };
+        },
+
+        onPanResponderMove: (
+          event,
+        ) => {
+          const currentX =
+            event.nativeEvent.pageX;
+
+          const currentY =
+            event.nativeEvent.pageY;
+
+          if (
+            lastTouchRef.current
+          ) {
+            const dx =
+              currentX -
+              lastTouchRef.current.x;
+
+            const dy =
+              currentY -
+              lastTouchRef.current.y;
+
+            rotationRef.current.y +=
+              dx * 0.004;
+
+            rotationRef.current.x +=
+              dy * 0.004;
+
+            rotationRef.current.x =
+              Math.max(
+                -0.9,
+                Math.min(
+                  0.9,
+                  rotationRef.current.x,
+                ),
+              );
+          }
+
+          lastTouchRef.current = {
+            x: currentX,
+            y: currentY,
+          };
+        },
+
+        onPanResponderRelease: (
+          event,
+        ) => {
+          const endX =
+            event.nativeEvent.pageX;
+
+          const endY =
+            event.nativeEvent.pageY;
+
+          const start =
+            touchStartRef.current;
+
+          if (start) {
+            const distance =
+              Math.sqrt(
+                Math.pow(
+                  endX - start.x,
+                  2,
+                ) +
+                  Math.pow(
+                    endY - start.y,
+                    2,
+                  ),
+              );
+
+            if (distance < 12) {
+              console.log("UNIVERSE TAP DETECTED");
+
+              router.push(
+                '/curiosity/vedic/nikhilam' as any,
+              );
+            }
+          }
+
+          lastTouchRef.current = null;
+          touchStartRef.current = null;
+        },
+
+        onPanResponderTerminate:
+          () => {
+            lastTouchRef.current = null;
+            touchStartRef.current = null;
+          },
+      }),
+    ).current;
+
+  const onContextCreate = async (
+    gl: any,
+  ) => {
+    const scene =
+      new THREE.Scene();
+
+    scene.background =
+      new THREE.Color('#020713');
+
+    const width =
+      gl.drawingBufferWidth;
+
+    const height =
+      gl.drawingBufferHeight;
+
+    viewportRef.current = {
+      width,
+      height,
+    };
+
+    const camera =
+      new THREE.PerspectiveCamera(
+        55,
+        width / height,
+        0.1,
+        100,
+      );
+
+    camera.position.set(
+      0,
+      0,
+      13,
+    );
+
+    cameraRef.current =
+      camera;
+
+    const renderer =
+      new THREE.WebGLRenderer({
+        canvas: {
+          width,
+          height,
+          style: {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          clientWidth: width,
+          clientHeight: height,
+        } as any,
+        context: gl,
+        antialias: true,
+      });
+
+    renderer.setSize(
+      width,
+      height,
+      false,
+    );
+
+    rendererRef.current =
+      renderer;
+
+    const universe =
+      new THREE.Group();
+
+    universeRef.current =
+      universe;
+
+    scene.add(universe);
+
+    /*
+     * BACKGROUND
+     */
+
+    const backgroundGeometry =
+      new THREE.BufferGeometry();
+
+    backgroundGeometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        createBackgroundStars(),
+        3,
+      ),
+    );
+
+    const backgroundMaterial =
+      new THREE.PointsMaterial({
+        color: '#9bbce8',
+        size: 0.025,
+        transparent: true,
+        opacity: 0.5,
+        sizeAttenuation: true,
+      });
+
+    const backgroundStars =
+      new THREE.Points(
+        backgroundGeometry,
+        backgroundMaterial,
+      );
+
+    universe.add(
+      backgroundStars,
+    );
+
+    /*
+     * SUBJECT UNIVERSE
+     */
+
+    interactiveObjectsRef.current =
+      [];
+
+    SUBJECTS.forEach(
+      (subject) => {
+        const group =
+          createSubjectShape(
+            subject,
+          );
+
+        group.position.set(
+          subject.position[0],
+          subject.position[1],
+          subject.position[2],
+        );
+
+        group.userData.subjectId =
+          subject.id;
+
+        group.scale.setScalar(
+          subject.id === 'vedic'
+            ? 1.15
+            : 1,
+        );
+
+        interactiveObjectsRef.current.push(
+          group,
+        );
+
+        universe.add(group);
+      },
+    );
+
+    /*
+     * VEDIC LESSON STARS
+     */
+
+    const lessonPositions =
+      new Float32Array(
+        LESSON_STARS.length * 3,
+      );
+
+    LESSON_STARS.forEach(
+      (star, index) => {
+        lessonPositions[
+          index * 3
+        ] =
+          star.position[0];
+
+        lessonPositions[
+          index * 3 + 1
+        ] =
+          star.position[1];
+
+        lessonPositions[
+          index * 3 + 2
+        ] =
+          star.position[2];
+      },
+    );
+
+    const lessonGeometry =
+      new THREE.BufferGeometry();
+
+    lessonGeometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        lessonPositions,
+        3,
+      ),
+    );
+
+    const lessonMaterial =
+      new THREE.PointsMaterial({
+        color: '#ffffff',
+        size: 0.09,
+        transparent: true,
+        opacity: 0.9,
+        sizeAttenuation: true,
+      });
+
+    const lessonPoints =
+      new THREE.Points(
+        lessonGeometry,
+        lessonMaterial,
+      );
+
+    universe.add(
+      lessonPoints,
+    );
+
+    /*
+     * SUBTLE GLOW
+     */
+
+    const glowGeometry =
+      new THREE.BufferGeometry();
+
+    glowGeometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        lessonPositions,
+        3,
+      ),
+    );
+
+    const glowMaterial =
+      new THREE.PointsMaterial({
+        color: '#8fbaff',
+        size: 0.25,
+        transparent: true,
+        opacity: 0.055,
+        sizeAttenuation: true,
+      });
+
+    const glow =
+      new THREE.Points(
+        glowGeometry,
+        glowMaterial,
+      );
+
+    universe.add(glow);
+
+    /*
+     * ANIMATION
+     */
+
+    const clock =
+      new THREE.Clock();
+
+    const animate = () => {
+      animationRef.current =
+        requestAnimationFrame(
+          animate,
+        );
+
+      const time =
+        clock.getElapsedTime();
+
+      universe.rotation.x =
+        rotationRef.current.x;
+
+      universe.rotation.y =
+        rotationRef.current.y;
+
+      backgroundStars.rotation.y =
+        time * 0.0015;
+
+      interactiveObjectsRef.current.forEach(
+        (object, index) => {
+          object.rotation.y =
+            time *
+              (0.12 +
+                index * 0.01);
+
+          object.rotation.z =
+            Math.sin(
+              time * 0.35 +
+                index,
+            ) * 0.12;
+
+          const pulse =
+            1 +
+            Math.sin(
+              time * 1.1 +
+                index,
+            ) *
+              0.035;
+
+          object.scale.setScalar(
+            (index === 0
+              ? 1.15
+              : 1) * pulse,
+          );
+        },
+      );
+
+      lessonMaterial.opacity =
+        0.78 +
+        Math.sin(time * 1.8) *
+          0.12;
+
+      glowMaterial.opacity =
+        0.04 +
+        (Math.sin(
+          time * 1.3,
+        ) +
+          1) *
+          0.012;
+
+      renderer.render(
+        scene,
+        camera,
+      );
+
+      gl.endFrameEXP();
+    };
+
+    animate();
+  };
+
+  useEffect(() => {
+    return () => {
+      if (
+        animationRef.current !== null
+      ) {
+        cancelAnimationFrame(
+          animationRef.current,
+        );
+      }
+
+      rendererRef.current?.dispose();
+    };
+  }, []);
+
+  return (
+    <View
+      style={styles.container}
+    >
+
+
+
+      <GLView
+        style={styles.glView}
+        onContextCreate={
+          onContextCreate
+        }
+      />
+
+      <View
+        pointerEvents="none"
+        style={styles.topInfo}
+      >
+        <Text
+          style={styles.title}
+        >
+          CONSTELLATION
+        </Text>
+
+        <Text
+          style={styles.subject}
+        >
+          VEDIC MATHS
+        </Text>
+
+        <Text
+          style={styles.level}
+        >
+          LEVEL 01 · EXPLORATION
+        </Text>
+      </View>
+
+      <View
+        style={styles.touchLayer}
+        {...panResponder.panHandlers}
+      />
+
+      <View
+        pointerEvents="box-none"
+        style={styles.bottomContainer}
+      >
+        <Pressable
+          onPress={openLesson}
+          style={({ pressed }) => [
+            styles.lessonTab,
+            pressed &&
+              styles.lessonTabPressed,
+          ]}
+        >
+          <View
+            style={styles.lessonTextContainer}
+          >
+            <Text
+              style={styles.lessonSmall}
+            >
+              NEXT STAR
+            </Text>
+
+            <Text
+              numberOfLines={1}
+              style={styles.lessonTitle}
+            >
+              {selectedStar?.title ??
+                'Select a star'}
+            </Text>
+
+            <Text
+              style={styles.lessonAction}
+            >
+              TAP TO BEGIN LESSON
+            </Text>
+          </View>
+
+          <Text
+            style={styles.arrow}
+          >
+            →
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles =
+  StyleSheet.create({
+
+
+    container: {
+      flex: 1,
+      backgroundColor: '#020713',
+    },
+
+    glView: {
+      flex: 1,
+    },
+
+    touchLayer: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor:
+        'transparent',
+    },
+
+    topInfo: {
+      position: 'absolute',
+      top: 58,
+      left: 22,
+      right: 22,
+      alignItems: 'center',
+    },
+
+    title: {
+      color: '#eef5ff',
+      fontSize: 15,
+      fontWeight: '800',
+      letterSpacing: 4,
+    },
+
+    subject: {
+      marginTop: 5,
+      color:
+        'rgba(205,225,255,0.72)',
+      fontSize: 11,
+      fontWeight: '600',
+      letterSpacing: 3,
+    },
+
+    level: {
+      marginTop: 8,
+      color:
+        'rgba(170,195,230,0.48)',
+      fontSize: 9,
+      fontWeight: '600',
+      letterSpacing: 2,
+    },
+
+    bottomContainer: {
+      position: 'absolute',
+      left: 16,
+      right: 16,
+      bottom: 24,
+    },
+
+    lessonTab: {
+      minHeight: 92,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor:
+        'rgba(200,220,250,0.14)',
+      backgroundColor:
+        'rgba(12,22,39,0.78)',
+      paddingHorizontal: 20,
+      paddingVertical: 15,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'space-between',
+    },
+
+    lessonTabPressed: {
+      opacity: 0.82,
+      transform: [
+        {
+          scale: 0.985,
+        },
+      ],
+    },
+
+    lessonTextContainer: {
+      flex: 1,
+      minWidth: 0,
+    },
+
+    lessonSmall: {
+      color:
+        'rgba(180,205,240,0.48)',
+      fontSize: 8,
+      fontWeight: '700',
+      letterSpacing: 2,
+    },
+
+    lessonTitle: {
+      marginTop: 5,
+      color: '#edf4ff',
+      fontSize: 17,
+      fontWeight: '700',
+    },
+
+    lessonAction: {
+      marginTop: 6,
+      color:
+        'rgba(190,215,250,0.52)',
+      fontSize: 8,
+      fontWeight: '700',
+      letterSpacing: 1.5,
+    },
+
+    arrow: {
+      marginLeft: 14,
+      color: '#dce9ff',
+      fontSize: 27,
+      fontWeight: '300',
+    },
+  });

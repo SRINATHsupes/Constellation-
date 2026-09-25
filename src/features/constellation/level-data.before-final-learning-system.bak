@@ -1,0 +1,93 @@
+export type LevelNode = {
+  id: string;
+  level: number;
+  title: string;
+  route: string | null;
+};
+
+export const SUBJECT_LEVELS: Record<string, LevelNode[]> = {
+  vedic: [
+    {
+      id: 'vedic-01',
+      level: 1,
+      title: 'Nikhilam',
+      route: '/curiosity/vedic/nikhilam',
+    },
+    {
+      id: 'vedic-02',
+      level: 2,
+      title: 'Ekadhikena Purvena',
+      route: '/curiosity/vedic/ekadhikena',
+    },
+    {
+      id: 'vedic-03',
+      level: 3,
+      title: 'Urdhva Tiryak',
+      route: '/curiosity/vedic/urdhva',
+    },
+    {
+      id: 'vedic-04',
+      level: 4,
+      title: 'Yavadunam',
+      route: '/curiosity/vedic/yavadunam',
+    },
+    {
+      id: 'vedic-05',
+      level: 5,
+      title: 'Antyayordashakepi',
+      route: '/curiosity/vedic/antyayordashakepi',
+    },
+    {
+      id: 'vedic-06',
+      level: 6,
+      title: 'Mental Calculation',
+      route: '/curiosity/vedic/mental-calculation',
+    },
+  ],
+
+  physics: [
+    { id: 'physics-01', level: 1, title: 'Motion', route: null },
+    { id: 'physics-02', level: 2, title: 'Forces', route: null },
+    { id: 'physics-03', level: 3, title: 'Energy', route: null },
+  ],
+
+  nutrition: [
+    { id: 'nutrition-01', level: 1, title: 'Food & Energy', route: null },
+    { id: 'nutrition-02', level: 2, title: 'Nutrients', route: null },
+    { id: 'nutrition-03', level: 3, title: 'The Human Body', route: null },
+  ],
+
+  electronics: [
+    { id: 'electronics-01', level: 1, title: 'Components', route: null },
+    { id: 'electronics-02', level: 2, title: 'Circuits', route: null },
+    { id: 'electronics-03', level: 3, title: 'Sensors', route: null },
+  ],
+
+  drawing: [
+    { id: 'drawing-01', level: 1, title: 'Shapes', route: null },
+    { id: 'drawing-02', level: 2, title: 'Lines & Forms', route: null },
+    { id: 'drawing-03', level: 3, title: 'Create', route: null },
+  ],
+
+  music: [
+    { id: 'music-01', level: 1, title: 'Rhythm', route: null },
+    { id: 'music-02', level: 2, title: 'Sound', route: null },
+    { id: 'music-03', level: 3, title: 'Melody', route: null },
+  ],
+
+  manufacturing: [
+    { id: 'manufacturing-01', level: 1, title: 'Gears', route: null },
+    { id: 'manufacturing-02', level: 2, title: 'Machines', route: null },
+    { id: 'manufacturing-03', level: 3, title: 'Build', route: null },
+  ],
+
+  escape: [
+    { id: 'escape-01', level: 1, title: 'The Door', route: null },
+    { id: 'escape-02', level: 2, title: 'The Lock', route: null },
+    { id: 'escape-03', level: 3, title: 'Escape', route: null },
+  ],
+};
+
+export function getSubjectLevels(subjectId: string): LevelNode[] {
+  return SUBJECT_LEVELS[subjectId] ?? [];
+}

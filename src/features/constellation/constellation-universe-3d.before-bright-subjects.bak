@@ -1,0 +1,768 @@
+import { GLView } from 'expo-gl';
+import { useRouter } from 'expo-router';
+import { useRef } from 'react';
+import {
+  PanResponder,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import * as THREE from 'three';
+
+type Subject = {
+  id: string;
+  name: string;
+  object: THREE.Group;
+};
+
+export function ConstellationUniverse3D() {
+  const router = useRouter();
+
+  const cameraRef =
+    useRef<THREE.PerspectiveCamera | null>(null);
+
+  const rendererRef =
+    useRef<THREE.WebGLRenderer | null>(null);
+
+  const universeRef =
+    useRef<THREE.Group | null>(null);
+
+  const subjectsRef =
+    useRef<Subject[]>([]);
+
+  const viewportRef =
+    useRef({ width: 1, height: 1 });
+
+  const rotationRef =
+    useRef({ x: 0, y: 0 });
+
+  const startRef =
+    useRef<{ x: number; y: number } | null>(null);
+
+  const lastRef =
+    useRef<{ x: number; y: number } | null>(null);
+
+
+  /* =====================================================
+     VEDIC MATHS MODEL
+  ===================================================== */
+
+  const createVedicModel = () => {
+    const group = new THREE.Group();
+
+    const gold = new THREE.MeshStandardMaterial({
+      color: '#f6c453',
+      emissive: '#6f4300',
+      emissiveIntensity: 1.1,
+      metalness: 0.8,
+      roughness: 0.2,
+    });
+
+    const violet = new THREE.MeshStandardMaterial({
+      color: '#9b6cff',
+      emissive: '#321066',
+      emissiveIntensity: 0.9,
+      metalness: 0.55,
+      roughness: 0.25,
+    });
+
+    const cyan = new THREE.MeshStandardMaterial({
+      color: '#48d9ff',
+      emissive: '#063c55',
+      emissiveIntensity: 0.8,
+      metalness: 0.4,
+      roughness: 0.25,
+    });
+
+
+    /*
+      Large mathematical core
+    */
+
+    const core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.85, 1),
+      gold,
+    );
+
+    group.add(core);
+
+
+    /*
+      Inner geometric core
+    */
+
+    const inner = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.52, 1),
+      violet,
+    );
+
+    group.add(inner);
+
+
+    /*
+      Three mathematical rings
+    */
+
+    for (let i = 0; i < 3; i += 1) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(
+          1.15 + i * 0.3,
+          0.045,
+          12,
+          64,
+        ),
+        i === 1 ? violet : gold,
+      );
+
+      ring.rotation.x =
+        Math.PI / 2 + i * 0.35;
+
+      ring.rotation.y =
+        i * 0.55;
+
+      group.add(ring);
+    }
+
+
+    /*
+      Eight radial mathematical arms
+    */
+
+    for (let i = 0; i < 8; i += 1) {
+      const angle =
+        (Math.PI * 2 * i) / 8;
+
+      const arm = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 1.7, 0.08),
+        cyan,
+      );
+
+      arm.rotation.z = angle;
+
+      group.add(arm);
+    }
+
+
+    /*
+      Small mathematical nodes
+    */
+
+    for (let i = 0; i < 16; i += 1) {
+      const angle =
+        (Math.PI * 2 * i) / 16;
+
+      const radius = 1.7;
+
+      const node = new THREE.Mesh(
+        new THREE.SphereGeometry(
+          0.075,
+          12,
+          12,
+        ),
+        i % 2 === 0 ? gold : violet,
+      );
+
+      node.position.set(
+        Math.cos(angle) * radius,
+        Math.sin(angle) * radius,
+        0,
+      );
+
+      group.add(node);
+    }
+
+
+    group.userData.spaceObject = 'vedic';
+
+    return group;
+  };
+
+
+  /* =====================================================
+     BACKGROUND
+  ===================================================== */
+
+  const createStars = (
+    scene: THREE.Scene,
+  ) => {
+    const positions: number[] = [];
+
+    for (let i = 0; i < 1400; i += 1) {
+      positions.push(
+        (Math.random() - 0.5) * 70,
+        (Math.random() - 0.5) * 50,
+        (Math.random() - 0.5) * 45,
+      );
+    }
+
+    const geometry =
+      new THREE.BufferGeometry();
+
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        positions,
+        3,
+      ),
+    );
+
+    const material =
+      new THREE.PointsMaterial({
+        color: '#b8d4ff',
+        size: 0.045,
+        transparent: true,
+        opacity: 0.8,
+      });
+
+    scene.add(
+      new THREE.Points(
+        geometry,
+        material,
+      ),
+    );
+  };
+
+
+  /* =====================================================
+     SELECT OBJECT
+  ===================================================== */
+
+  const selectObject = (
+    x: number,
+    y: number,
+  ) => {
+    const camera =
+      cameraRef.current;
+
+    if (!camera) return;
+
+    const pointer =
+      new THREE.Vector2(
+        (x / viewportRef.current.width) *
+          2 -
+          1,
+
+        -(y /
+          viewportRef.current.height) *
+          2 +
+          1,
+      );
+
+    const raycaster =
+      new THREE.Raycaster();
+
+    raycaster.setFromCamera(
+      pointer,
+      camera,
+    );
+
+    const targets =
+      subjectsRef.current.map(
+        (subject) =>
+          subject.object,
+      );
+
+    const hits =
+      raycaster.intersectObjects(
+        targets,
+        true,
+      );
+
+    if (!hits.length) return;
+
+    let object:
+      THREE.Object3D | null =
+      hits[0].object;
+
+    while (
+      object &&
+      !object.userData.spaceObject
+    ) {
+      object = object.parent;
+    }
+
+    if (!object) return;
+
+    const id =
+      object.userData.spaceObject;
+
+    if (id === 'vedic') {
+      router.push(
+        '/curiosity/vedic/nikhilam' as any,
+      );
+    }
+
+    if (id === 'rocket') {
+      router.push(
+        '/curiosity/rocket' as any,
+      );
+    }
+
+    if (id === 'astronaut') {
+      router.push(
+        '/worlds/space' as any,
+      );
+    }
+  };
+
+
+  /* =====================================================
+     TOUCH / DRAG
+  ===================================================== */
+
+  const panResponder =
+    useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder:
+          () => true,
+
+        onMoveShouldSetPanResponder:
+          () => true,
+
+        onPanResponderGrant:
+          (event) => {
+            const {
+              pageX,
+              pageY,
+            } = event.nativeEvent;
+
+            startRef.current = {
+              x: pageX,
+              y: pageY,
+            };
+
+            lastRef.current = {
+              x: pageX,
+              y: pageY,
+            };
+          },
+
+        onPanResponderMove:
+          (event) => {
+            const {
+              pageX,
+              pageY,
+            } = event.nativeEvent;
+
+            if (lastRef.current) {
+              const dx =
+                pageX -
+                lastRef.current.x;
+
+              const dy =
+                pageY -
+                lastRef.current.y;
+
+              rotationRef.current.y +=
+                dx * 0.004;
+
+              rotationRef.current.x +=
+                dy * 0.004;
+
+              rotationRef.current.x =
+                Math.max(
+                  -1,
+                  Math.min(
+                    1,
+                    rotationRef.current.x,
+                  ),
+                );
+            }
+
+            lastRef.current = {
+              x: pageX,
+              y: pageY,
+            };
+          },
+
+        onPanResponderRelease:
+          (event) => {
+            const {
+              pageX,
+              pageY,
+            } = event.nativeEvent;
+
+            const start =
+              startRef.current;
+
+            if (start) {
+              const dx =
+                pageX - start.x;
+
+              const dy =
+                pageY - start.y;
+
+              const distance =
+                Math.sqrt(
+                  dx * dx +
+                    dy * dy,
+                );
+
+              if (distance < 15) {
+                selectObject(
+                  pageX,
+                  pageY,
+                );
+              }
+            }
+
+            startRef.current = null;
+            lastRef.current = null;
+          },
+      }),
+    ).current;
+
+
+  /* =====================================================
+     THREE.JS
+  ===================================================== */
+
+  const onContextCreate =
+    async (gl: any) => {
+      const width =
+        gl.drawingBufferWidth;
+
+      const height =
+        gl.drawingBufferHeight;
+
+      viewportRef.current = {
+        width,
+        height,
+      };
+
+      const scene =
+        new THREE.Scene();
+
+      scene.background =
+        new THREE.Color(
+          '#01040d',
+        );
+
+
+      const camera =
+        new THREE.PerspectiveCamera(
+          55,
+          width / height,
+          0.1,
+          100,
+        );
+
+      camera.position.set(
+        0,
+        0,
+        15,
+      );
+
+      cameraRef.current =
+        camera;
+
+
+      const renderer =
+        new THREE.WebGLRenderer({
+          canvas: {
+            width,
+            height,
+            style: {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            clientWidth: width,
+            clientHeight: height,
+          } as any,
+
+          context: gl,
+
+          antialias: true,
+        });
+
+      renderer.setSize(
+        width,
+        height,
+        false,
+      );
+
+      rendererRef.current =
+        renderer;
+
+
+      const universe =
+        new THREE.Group();
+
+      universeRef.current =
+        universe;
+
+      scene.add(universe);
+
+      createStars(scene);
+
+
+      /* Lighting */
+
+      scene.add(
+        new THREE.AmbientLight(
+          '#ffffff',
+          2.5,
+        ),
+      );
+
+      const light =
+        new THREE.PointLight(
+          '#ffffff',
+          25,
+          50,
+        );
+
+      light.position.set(
+        0,
+        4,
+        10,
+      );
+
+      scene.add(light);
+
+
+      /* =================================================
+         VEDIC MATHS
+      ================================================= */
+
+      const vedic =
+        createVedicModel();
+
+      vedic.position.set(
+        -4.5,
+        1.8,
+        0,
+      );
+
+      universe.add(vedic);
+
+      subjectsRef.current.push({
+        id: 'vedic',
+        name: 'VEDIC MATHS',
+        object: vedic,
+      });
+
+
+
+      /* =================================================
+         ANIMATION
+      ================================================= */
+
+      const animate =
+        () => {
+          requestAnimationFrame(
+            animate,
+          );
+
+          universe.rotation.y =
+            rotationRef.current.y;
+
+          universe.rotation.x =
+            rotationRef.current.x;
+
+
+          vedic.rotation.y +=
+            0.004;
+
+          vedic.rotation.z +=
+            0.002;
+
+
+            0.006;
+
+            0.003;
+
+
+          const time =
+            Date.now() * 0.001;
+
+
+            2 +
+            Math.sin(
+              time * 1.2,
+            ) *
+              0.15;
+
+
+            -2.7 +
+            Math.sin(
+              time,
+            ) *
+              0.12;
+
+
+          renderer.render(
+            scene,
+            camera,
+          );
+
+          gl.endFrameEXP();
+        };
+
+      animate();
+    };
+
+
+  return (
+    <View
+      style={styles.container}
+    >
+      <GLView
+        style={styles.glView}
+        onContextCreate={
+          onContextCreate
+        }
+      />
+
+      <View
+        pointerEvents="none"
+        style={styles.titleBox}
+      >
+        <Text style={styles.title}>
+          CONSTELLATION
+        </Text>
+
+        <Text style={styles.subtitle}>
+          DISCOVER WHAT'S OUT THERE
+        </Text>
+      </View>
+
+
+      <View
+        pointerEvents="none"
+        style={styles.labels}
+      >
+        <Text
+          style={[
+            styles.label,
+            styles.vedic,
+          ]}
+        >
+          VEDIC MATHS
+        </Text>
+
+        <Text
+          style={[
+            styles.label,
+            styles.rocket,
+          ]}
+        >
+          ROCKET
+        </Text>
+
+        <Text
+          style={[
+            styles.label,
+            styles.space,
+          ]}
+        >
+          SPACE
+        </Text>
+      </View>
+
+
+      <View
+        style={styles.touch}
+        {...panResponder.panHandlers}
+      />
+
+      <View
+        pointerEvents="none"
+        style={styles.bottom}
+      >
+        <Text
+          style={styles.bottomText}
+        >
+          DRAG TO EXPLORE
+          {'   •   '}
+          TAP TO ENTER
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+
+/* =========================================================
+   STYLES
+========================================================= */
+
+const styles =
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor:
+        '#01040d',
+    },
+
+    glView: {
+      ...StyleSheet.absoluteFill,
+    },
+
+    touch: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor:
+        'transparent',
+    },
+
+    titleBox: {
+      position:
+        'absolute',
+      top: 55,
+      left: 24,
+    },
+
+    title: {
+      color: '#ffffff',
+      fontSize: 25,
+      fontWeight: '800',
+      letterSpacing: 4,
+    },
+
+    subtitle: {
+      color: '#8298bd',
+      marginTop: 6,
+      fontSize: 10,
+      letterSpacing: 2,
+    },
+
+    labels: {
+      ...StyleSheet.absoluteFill,
+    },
+
+    label: {
+      position: 'absolute',
+      color: '#dce8ff',
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 1.5,
+    },
+
+    vedic: {
+      left: '12%',
+      top: '37%',
+    },
+
+    rocket: {
+      right: '14%',
+      top: '33%',
+    },
+
+    space: {
+      left: '45%',
+      bottom: '23%',
+    },
+
+    bottom: {
+      position:
+        'absolute',
+      bottom: 28,
+      alignSelf:
+        'center',
+    },
+
+    bottomText: {
+      color: '#647b9f',
+      fontSize: 10,
+      letterSpacing: 1.3,
+    },
+  });

@@ -1,4 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  completeLevel,
+  getCompletedLevels,
+} from '@/features/progression/progression-store';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Animated,
@@ -1525,6 +1530,29 @@ export default function SubjectGameScreen() {
   const [levelIndex, setLevelIndex] = useState(0);
   const [stage, setStage] = useState<Stage>('learn');
   const [, setProgress] = useState(0);
+  const [completedLevels, setCompletedLevels] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+
+    getCompletedLevels()
+      .then((completed) => {
+        if (active) {
+          setCompletedLevels(completed);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCompletedLevels([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [subject, branch]);
+
+
+
 
   const theme = getTheme(subject);
   const levels = useMemo(
@@ -1554,25 +1582,111 @@ export default function SubjectGameScreen() {
         : subject.toUpperCase();
 
   async function finishLevel() {
-    await collectStar({
-      id: level.id,
+    const currentLevelId = level.id;
+
+    await completeLevel({
+      levelId: currentLevelId,
       subject,
+      branch,
       level: levelIndex + 1,
       title: level.title,
     });
 
+    setCompletedLevels((current) => {
+      if (current.includes(currentLevelId)) {
+        return current;
+      }
+
+      return [...current, currentLevelId];
+    });
+
     setStage('complete');
+    setProgress(5);
+  }
+
+  function isLevelUnlocked(index: number) {
+    if (index <= 0) {
+      return true;
+    }
+
+    const previousLevel = levels[index - 1];
+
+    return Boolean(
+      previousLevel &&
+      completedLevels.includes(previousLevel.id),
+    );
   }
 
   function nextLevel() {
-    if (levelIndex < levels.length - 1) {
-      setLevelIndex((value) => value + 1);
-      
-      setStage('learn');
-        return;
+    if (stage !== 'complete') {
+      return;
     }
 
-    router.back();
+    if (!completedLevels.includes(level.id)) {
+      return;
+    }
+
+    if (levelIndex >= levels.length - 1) {
+      router.back();
+      return;
+    }
+
+    const nextIndex = levelIndex + 1;
+
+    if (!isLevelUnlocked(nextIndex)) {
+      return;
+    }
+
+    setLevelIndex(nextIndex);
+    setStage('learn');
+    setProgress(0);
+  }
+
+  function goToPreviousLevel() {
+    if (levelIndex <= 0) {
+      return;
+    }
+
+    const previousIndex = levelIndex - 1;
+
+    setLevelIndex(previousIndex);
+    setStage('learn');
+    setProgress(0);
+  }
+
+  function goToNextLevel() {
+    if (stage !== 'complete') {
+      return;
+    }
+
+    const nextIndex = levelIndex + 1;
+
+    if (nextIndex >= levels.length) {
+      router.back();
+      return;
+    }
+
+    if (!isLevelUnlocked(nextIndex)) {
+      return;
+    }
+
+    setLevelIndex(nextIndex);
+    setStage('learn');
+    setProgress(0);
+  }
+
+  function selectLevel(index: number) {
+    if (index < 0 || index >= levels.length) {
+      return;
+    }
+
+    if (!isLevelUnlocked(index)) {
+      return;
+    }
+
+    setLevelIndex(index);
+    setStage('learn');
+    setProgress(0);
   }
 
   function continueStage() {
@@ -1652,32 +1766,49 @@ export default function SubjectGameScreen() {
           )}
 
           <View style={styles.levelMap}>
-            {levels.map((item, index) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.levelDot,
-                  index === levelIndex && {
-                    backgroundColor: theme.accent,
-                    borderColor: theme.accent,
-                  },
-                  index < levelIndex && {
-                    backgroundColor: 'rgba(255,255,255,0.75)',
-                  },
-                ]}
-              >
-                {index <= levelIndex && (
+            {levels.map((item, index) => {
+              const unlocked = isLevelUnlocked(index);
+              const completed = completedLevels.includes(item.id);
+              const active = index === levelIndex;
+
+              return (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    completed
+                      ? `Level ${index + 1}, completed`
+                      : unlocked
+                        ? `Level ${index + 1}, unlocked`
+                        : `Level ${index + 1}, locked`
+                  }
+                  disabled={!unlocked}
+                  onPress={() => selectLevel(index)}
+                  style={[
+                    styles.levelDot,
+                    active && {
+                      backgroundColor: theme.accent,
+                      borderColor: theme.accent,
+                    },
+                    completed &&
+                      !active && {
+                        backgroundColor: 'rgba(255,255,255,0.75)',
+                      },
+                    !unlocked && styles.levelDotLocked,
+                  ]}
+                >
                   <Text
                     style={[
                       styles.levelDotText,
-                      index === levelIndex && { color: '#101020' },
+                      active && { color: '#101020' },
+                      !unlocked && styles.levelDotLockedText,
                     ]}
                   >
-                    {index < levelIndex ? '✓' : index + 1}
+                    {completed ? '✓' : unlocked ? index + 1 : '•'}
                   </Text>
-                )}
-              </View>
-            ))}
+                </Pressable>
+              );
+            })}
           </View>
 
           <View style={styles.room}>
@@ -1950,6 +2081,211 @@ export default function SubjectGameScreen() {
                 </Text>
               </>
             )}
+
+            <View style={styles.levelConsole}>
+  <View style={styles.levelConsoleHeader}>
+    <View>
+      <Text style={styles.levelConsoleEyebrow}>
+        DISCOVERY PATH
+      </Text>
+      <Text style={styles.levelConsoleTitle}>
+        LEVEL {levelIndex + 1}
+        <Text style={styles.levelConsoleMuted}>
+          {'  '}OF {levels.length}
+        </Text>
+      </Text>
+    </View>
+
+    <View
+      style={[
+        styles.levelStateOrb,
+        {
+          borderColor: theme.accent,
+          backgroundColor: `${theme.accent}18`,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.levelStateOrbText,
+          { color: theme.accent },
+        ]}
+      >
+        {completedLevels.includes(level.id) ? '✦' : '○'}
+      </Text>
+    </View>
+  </View>
+
+  <View style={styles.levelConstellation}>
+    {levels.map((item, index) => {
+      const unlocked = isLevelUnlocked(index);
+      const completed = completedLevels.includes(item.id);
+      const active = index === levelIndex;
+
+      return (
+        <Pressable
+          key={item.id}
+          accessibilityRole="button"
+          accessibilityLabel={
+            completed
+              ? `Level ${index + 1}, completed`
+              : unlocked
+                ? `Level ${index + 1}, unlocked`
+                : `Level ${index + 1}, locked`
+          }
+          disabled={!unlocked}
+          onPress={() => selectLevel(index)}
+          style={({ pressed }) => [
+            styles.levelNode,
+            active && {
+              borderColor: theme.accent,
+              backgroundColor: `${theme.accent}22`,
+              shadowColor: theme.accent,
+            },
+            completed && !active && styles.levelNodeCompleted,
+            !unlocked && styles.levelNodeLocked,
+            pressed && unlocked && styles.levelNodePressed,
+          ]}
+        >
+          <Text
+            style={[
+              styles.levelNodeSymbol,
+              active && { color: theme.accent },
+              completed && !active && styles.levelNodeCompletedText,
+              !unlocked && styles.levelNodeLockedText,
+            ]}
+          >
+            {completed ? '✦' : unlocked ? '◇' : '•'}
+          </Text>
+
+          <Text
+            style={[
+              styles.levelNodeNumber,
+              active && { color: theme.accent },
+              !unlocked && styles.levelNodeLockedText,
+            ]}
+          >
+            {String(index + 1).padStart(2, '0')}
+          </Text>
+        </Pressable>
+      );
+    })}
+  </View>
+
+  <View style={styles.levelConsoleActions}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Previous level"
+      disabled={levelIndex === 0}
+      onPress={goToPreviousLevel}
+      style={({ pressed }) => [
+        styles.consoleAction,
+        levelIndex === 0 && styles.consoleActionDisabled,
+        pressed &&
+          levelIndex > 0 &&
+          styles.consoleActionPressed,
+      ]}
+    >
+      <Text
+        style={[
+          styles.consoleActionArrow,
+          levelIndex === 0 && styles.consoleActionDisabledText,
+        ]}
+      >
+        ←
+      </Text>
+      <View>
+        <Text
+          style={[
+            styles.consoleActionSmall,
+            levelIndex === 0 && styles.consoleActionDisabledText,
+          ]}
+        >
+          PREVIOUS
+        </Text>
+        <Text
+          style={[
+            styles.consoleActionHint,
+            levelIndex === 0 && styles.consoleActionDisabledText,
+          ]}
+        >
+          Earlier discovery
+        </Text>
+      </View>
+    </Pressable>
+
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Next level"
+      disabled={
+        stage !== 'complete' ||
+        levelIndex >= levels.length - 1 ||
+        !isLevelUnlocked(levelIndex + 1)
+      }
+      onPress={goToNextLevel}
+      style={({ pressed }) => [
+        styles.consoleAction,
+        styles.consoleActionNext,
+        (
+          stage !== 'complete' ||
+          levelIndex >= levels.length - 1 ||
+          !isLevelUnlocked(levelIndex + 1)
+        ) && styles.consoleActionDisabled,
+        pressed &&
+          stage === 'complete' &&
+          levelIndex < levels.length - 1 &&
+          isLevelUnlocked(levelIndex + 1) &&
+          styles.consoleActionPressed,
+      ]}
+    >
+      <View style={styles.consoleActionTextRight}>
+        <Text
+          style={[
+            styles.consoleActionSmall,
+            (
+              stage !== 'complete' ||
+              levelIndex >= levels.length - 1 ||
+              !isLevelUnlocked(levelIndex + 1)
+            ) && styles.consoleActionDisabledText,
+          ]}
+        >
+          NEXT
+        </Text>
+        <Text
+          style={[
+            styles.consoleActionHint,
+            (
+              stage !== 'complete' ||
+              levelIndex >= levels.length - 1 ||
+              !isLevelUnlocked(levelIndex + 1)
+            ) && styles.consoleActionDisabledText,
+          ]}
+        >
+          {stage === 'complete'
+            ? levelIndex >= levels.length - 1
+              ? 'Path complete'
+              : isLevelUnlocked(levelIndex + 1)
+                ? 'Discovery unlocked'
+                : 'Complete this level'
+            : 'Finish discovery'}
+        </Text>
+      </View>
+
+      <Text
+        style={[
+          styles.consoleActionArrow,
+          (
+            stage !== 'complete' ||
+            levelIndex >= levels.length - 1 ||
+            !isLevelUnlocked(levelIndex + 1)
+          ) && styles.consoleActionDisabledText,
+        ]}
+      >
+        →
+      </Text>
+    </Pressable>
+  </View>
+</View>
 
             {stage === 'complete' && (
               <View style={styles.completeBox}>
@@ -2564,6 +2900,28 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
+
+
+
+
+
+
+
+
+
+
+
+
+  levelDotLocked: {
+    backgroundColor: 'rgba(255,255,255,0.055)',
+    borderColor: 'rgba(255,255,255,0.18)',
+    opacity: 0.72,
+  },
+
+  levelDotLockedText: {
+    color: 'rgba(255,255,255,0.5)',
+  },
+
   completeBox: {
     minHeight: 330,
     alignItems: 'center',
@@ -2645,4 +3003,172 @@ const styles = StyleSheet.create({
     color: '#080914',
     fontWeight: '900',
   },
+
+  levelConsole: {
+    marginTop: 18,
+    marginBottom: 18,
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(10,12,28,0.72)',
+  },
+
+  levelConsoleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+
+  levelConsoleEyebrow: {
+    color: 'rgba(255,255,255,0.42)',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+
+  levelConsoleTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: 3,
+    letterSpacing: 1,
+  },
+
+  levelConsoleMuted: {
+    color: 'rgba(255,255,255,0.38)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  levelStateOrb: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  levelStateOrbText: {
+    fontSize: 19,
+    fontWeight: '900',
+  },
+
+  levelConstellation: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+
+  levelNode: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  levelNodePressed: {
+    transform: [{ scale: 0.92 }],
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+
+  levelNodeCompleted: {
+    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+
+  levelNodeLocked: {
+    opacity: 0.34,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+
+  levelNodeSymbol: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 18,
+    lineHeight: 18,
+  },
+
+  levelNodeNumber: {
+    color: 'rgba(255,255,255,0.42)',
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+
+  levelNodeCompletedText: {
+    color: '#FFFFFF',
+  },
+
+  levelNodeLockedText: {
+    color: 'rgba(255,255,255,0.25)',
+  },
+
+  levelConsoleActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  consoleAction: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  consoleActionNext: {
+    justifyContent: 'flex-end',
+  },
+
+  consoleActionPressed: {
+    transform: [{ scale: 0.97 }],
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(255,255,255,0.24)',
+  },
+
+  consoleActionDisabled: {
+    opacity: 0.38,
+  },
+
+  consoleActionArrow: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+
+  consoleActionSmall: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+  },
+
+  consoleActionHint: {
+    color: 'rgba(255,255,255,0.40)',
+    fontSize: 9,
+    marginTop: 2,
+  },
+
+  consoleActionTextRight: {
+    alignItems: 'flex-end',
+  },
+
+  consoleActionDisabledText: {
+    color: 'rgba(255,255,255,0.28)',
+  },
+
 });

@@ -1034,9 +1034,10 @@ export function ConstellationUniverse3D() {
           const isCenter = index === 0;
 
           const node = new THREE.Mesh(
-            new THREE.IcosahedronGeometry(
-              isCenter ? 0.18 : 0.09,
-              1,
+            new THREE.SphereGeometry(
+              isCenter ? 0.18 : 0.10,
+              16,
+              16,
             ),
             new THREE.MeshBasicMaterial({
               color,
@@ -1336,29 +1337,6 @@ export function ConstellationUniverse3D() {
                 `Discover ${discovery.title}`
               }
             >
-              <View
-                style={[
-                  styles.starHitCore,
-                  {
-                    backgroundColor:
-                      discovery.color,
-                    opacity:
-                      selected ? 0.32 : 0.12,
-                  },
-                ]}
-              />
-
-              <Text
-                style={[
-                  styles.starHitSymbol,
-                  {
-                    color:
-                      discovery.color,
-                  },
-                ]}
-              >
-                
-              </Text>
             </Pressable>
           );
         })}
@@ -1447,28 +1425,11 @@ const styles = StyleSheet.create({
 
   starHitButton: {
     position: 'absolute',
-    borderWidth: 1,
+    borderWidth: 0,
     borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  starHitCore: {
-    position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-
-  starHitSymbol: {
-    fontSize: 30,
-    fontWeight: '900',
-    textShadowColor: '#FFFFFF',
-    textShadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    textShadowRadius: 8,
+    backgroundColor: 'transparent',
   },
 
   topInfo: {

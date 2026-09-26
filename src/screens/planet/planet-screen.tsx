@@ -37,7 +37,6 @@ export function PlanetScreen() {
             pressed && styles.spaceButtonPressed,
           ]}
         >
-          <Text style={styles.spaceIcon}>✦</Text>
         </Pressable>
 
         <Text style={styles.spaceLabel}>
@@ -56,7 +55,7 @@ export function PlanetScreen() {
         <View style={styles.modalBackground}>
           <View style={styles.prompt}>
             <Text style={styles.promptIcon}>
-              ✦
+              
             </Text>
 
             <Text style={styles.promptTitle}>

@@ -439,7 +439,6 @@ function ConceptAnimation({
 
   return (
     <View style={styles.animationArea}>
-      <Text style={styles.defaultSymbol}>✦</Text>
       <Text style={styles.animationCaption}>
         discover the idea
       </Text>

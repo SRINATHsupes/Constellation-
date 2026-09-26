@@ -29,7 +29,7 @@ const VEDIC_NODES: Node[] = [
     subtitle: 'Base & complement',
     x: 75,
     y: 250,
-    symbol: '✦',
+    symbol: '',
     shape: 'star',
     unlocked: true,
     completed: false,
@@ -295,7 +295,7 @@ export function ConstellationScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.kicker}>✦ YOUR LEARNING UNIVERSE</Text>
+          <Text style={styles.kicker}> YOUR LEARNING UNIVERSE</Text>
 
           <Text style={styles.title}>Vedic Maths</Text>
 
@@ -319,7 +319,6 @@ export function ConstellationScreen() {
         <ConstellationMap />
 
         <View style={styles.bottomCard}>
-          <Text style={styles.bottomSymbol}>✦</Text>
 
           <View style={styles.bottomCopy}>
             <Text style={styles.bottomTitle}>Your constellation grows</Text>

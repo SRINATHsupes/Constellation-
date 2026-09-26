@@ -1357,7 +1357,7 @@ export function ConstellationUniverse3D() {
                   },
                 ]}
               >
-                ✦
+                
               </Text>
             </Pressable>
           );
@@ -1389,7 +1389,7 @@ export function ConstellationUniverse3D() {
 
           <Text style={styles.selectionStatus}>
             {selectedDiscovery.unlocked
-              ? '✦ DISCOVERED · READY TO EXPLORE'
+              ? ' DISCOVERED · READY TO EXPLORE'
               : '✧ MYSTERIOUS · WAITING TO BE DISCOVERED'}
           </Text>
         </View>

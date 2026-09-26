@@ -93,7 +93,7 @@ export default function VedicRoom() {
 
         <View style={styles.room}>
           <View style={styles.sky}>
-            <Text style={styles.constellation}>✦   ·   ✧   ·   ✦</Text>
+            <Text style={styles.constellation}>   ·   ✧   ·   </Text>
             <Text style={styles.templeMark}>𑁍</Text>
           </View>
 

@@ -471,7 +471,7 @@ export default function LessonScreen() {
 
         <View style={styles.result}>
           <Text style={styles.star}>
-            ✦
+            
           </Text>
 
           <Text style={styles.resultLabel}>
@@ -566,7 +566,7 @@ export default function LessonScreen() {
       <View style={styles.content}>
         <View style={styles.lessonSymbol}>
           <Text style={styles.symbolText}>
-            ✦
+            
           </Text>
         </View>
 
@@ -633,7 +633,7 @@ export default function LessonScreen() {
             >
               {selectedAnswer ===
               currentQuestion.answer
-                ? 'CORRECT ✦'
+                ? 'CORRECT '
                 : 'KEEP EXPLORING'}
             </Text>
 

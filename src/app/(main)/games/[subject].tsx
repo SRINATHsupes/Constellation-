@@ -299,7 +299,6 @@ export default function SubjectGamesScreen() {
         </View>
 
         <View style={styles.bottomMessage}>
-          <Text style={styles.bottomStar}>✦</Text>
 
           <Text style={styles.bottomTitle}>
             PLAY TO DISCOVER

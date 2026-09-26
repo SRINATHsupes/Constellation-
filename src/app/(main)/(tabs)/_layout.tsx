@@ -23,7 +23,7 @@ export default function MainTabsLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(constellation)">
         <NativeTabs.Trigger.Icon sf={{ default: 'sparkles', selected: 'sparkles' }} md="stars" />
-        <NativeTabs.Trigger.Label>My Finds</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Constellation</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

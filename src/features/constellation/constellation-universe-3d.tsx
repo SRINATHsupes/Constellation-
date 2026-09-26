@@ -12,14 +12,7 @@ import * as THREE from 'three';
 
 type SubjectId =
   | 'vedic'
-  | 'nutrition'
-  | 'physics'
-  | 'electronics'
-  | 'arts'
-  | 'music'
-  | 'manufacturing'
-  | 'humanity'
-  | 'nature';
+  | 'arts';
 
 type Subject = {
   id: SubjectId;
@@ -45,154 +38,38 @@ const SUBJECTS: Subject[] = [
     id: 'vedic',
     title: 'VEDIC MATHS',
     subtitle: 'Numbers · Patterns · Mental Power',
-    color: '#FFD166',
-    position: [-3.6, 3.0, -0.5],
-  },
-  {
-    id: 'nutrition',
-    title: 'NUTRITION',
-    subtitle: 'Food · Body · Life',
-    color: '#67E8A5',
-    position: [3.6, 2.7, -0.4],
-  },
-  {
-    id: 'physics',
-    title: 'PHYSICS',
-    subtitle: 'Forces · Motion · Energy',
-    color: '#70B7FF',
-    position: [4.0, -2.1, 0.2],
-  },
-  {
-    id: 'electronics',
-    title: 'ELECTRONICS',
-    subtitle: 'Circuits · Signals · Machines',
-    color: '#C58BFF',
-    position: [0.2, -3.4, -0.2],
+    color: '#C8B5E8',
+    position: [-3.0, 1.2, -0.5],
   },
   {
     id: 'arts',
     title: 'ARTS',
-    subtitle: 'Drawing · DIY · Models',
-    color: '#FF75B8',
-    position: [-4.2, -2.3, 0.3],
-  },
-  {
-    id: 'music',
-    title: 'MUSIC',
-    subtitle: 'Sound · Rhythm · Resonance',
-    color: '#55E6FF',
-    position: [0.1, 3.8, 0.1],
-  },
-  {
-    id: 'manufacturing',
-    title: 'MANUFACTURING',
-    subtitle: 'Materials · Machines · Making',
-    color: '#FF9F68',
-    position: [-6.0, 1.0, -0.8],
-  },
-  {
-    id: 'humanity',
-    title: 'HUMANITY',
-    subtitle: 'People · Empathy · Community',
-    color: '#FFB6A3',
-    position: [5.8, 0.5, -0.7],
-  },
-  {
-    id: 'nature',
-    title: 'NATURE',
-    subtitle: 'Plants · Ecosystems · Life',
-    color: '#8FE388',
-    position: [0.0, 5.8, -0.8],
+    subtitle: 'Drawing · Create · Imagine',
+    color: '#FFB7C5',
+    position: [3.0, -1.2, 0.3],
   },
 ];
 
 const DISCOVERIES: Discovery[] = [
-
   {
     id: 'vedic-maths',
     subjectId: 'vedic',
     title: 'NUMBER SENSE',
     subtitle: 'Discover patterns in numbers',
-    route: '/games/vedic',
-    color: '#FFD166',
-    position: [-3.3, 2.4, -0.5],
-    unlocked: true,
-  },
-
-  {
-    id: 'nutrition-basics',
-    subjectId: 'nutrition',
-    title: 'FOOD & ENERGY',
-    subtitle: 'Discover what food does',
-    route: '/curiosity/nutrition-basics',
-    color: '#67E8A5',
-    position: [3.2, 2.0, -0.4],
-    unlocked: true,
-  },
-
-  {
-    id: 'physics-motion',
-    subjectId: 'physics',
-    title: 'MOTION',
-    subtitle: 'Why things move',
-    route: '/curiosity/physics-motion',
-    color: '#70B7FF',
-    position: [3.5, -1.9, 0.2],
-    unlocked: true,
-  },
-
-  {
-    id: 'electronics-circuits',
-    subjectId: 'electronics',
-    title: 'CIRCUITS',
-    subtitle: 'Make electricity travel',
-    route: '/curiosity/electronics-circuits',
-    color: '#C58BFF',
-    position: [0, -3.1, -0.2],
+    route: '/play/vedic-escape',
+    color: '#C8B5E8',
+    position: [-3.0, 1.2, -0.5],
     unlocked: true,
   },
 
   {
     id: 'drawing-shapes',
     subjectId: 'arts',
-    title: 'SHAPES',
-    subtitle: 'Build pictures from geometry',
-    route: '/curiosity/drawing-shapes',
-    color: '#FF75B8',
-    position: [-3.6, -1.9, 0.3],
-    unlocked: true,
-  },
-
-  {
-    id: 'music-waves',
-    subjectId: 'music',
-    title: 'SOUND WAVES',
-    subtitle: 'See sound as movement',
-    route: '/games/music',
-    color: '#55E6FF',
-    position: [0, 3.3, 0.1],
-    unlocked: true,
-  },
-
-  {
-    id: 'manufacturing-machines',
-    subjectId: 'manufacturing',
-    title: 'MACHINES',
-    subtitle: 'Materials · Gears · Making',
-    route: '/games/manufacturing',
-    color: '#FF9F68',
-    position: [-5.8, 1.0, -0.8],
-    unlocked: true,
-  },
-
-  {
-    id: 'humanity-community',
-    subjectId: 'humanity',
-    title: 'HUMANITY',
-    subtitle: 'People · Empathy · Community',
-    route: '/games/humanity',
-    color: '#FFB6A3',
-    position: [5.6, 0.5, -0.7],
+    title: 'ARTS',
+    subtitle: 'Draw · Observe · Create',
+    route: '/play/arts-drawing',
+    color: '#FFB7C5',
+    position: [3.0, -1.2, 0.3],
     unlocked: true,
   },
 ];
@@ -215,14 +92,7 @@ const CONSTELLATION_CENTERS: Record<
   [number, number, number]
 > = {
   vedic: [-4.2, 2.2, 0],
-  nutrition: [3.8, 2.8, -0.4],
-  physics: [4.0, -2.0, 0.2],
-  electronics: [0.2, -3.8, -0.2],
   arts: [-4.2, -2.4, 0.3],
-  music: [0.0, 4.2, 0.1],
-  manufacturing: [-6.0, 1.0, -0.8],
-  humanity: [5.8, 0.5, -0.7],
-  nature: [0.0, 5.8, -0.8],
 };
 
 /*
@@ -248,32 +118,8 @@ const CONSTELLATION_PATTERNS: Record<
     [0, 1.8, 0.05],
   ],
 
-  nutrition: [
-    [-1.6, 0.4, 0],
-    [-0.8, 1.4, 0.2],
-    [0.8, 1.5, -0.15],
-    [1.7, 0.3, 0.1],
-    [0.7, -1.3, 0],
-    [-0.9, -1.2, 0.15],
-  ],
 
-  physics: [
-    [0, 1.8, 0],
-    [-1.7, 0.8, 0.2],
-    [1.7, 0.7, -0.2],
-    [-1.4, -1.1, 0],
-    [1.4, -1.2, 0.15],
-    [0, -1.9, -0.1],
-  ],
 
-  electronics: [
-    [-1.8, 1.1, 0],
-    [0, 1.8, 0.15],
-    [1.8, 1.0, -0.1],
-    [-1.7, -1.1, 0.1],
-    [0, -1.8, -0.15],
-    [1.7, -1.0, 0],
-  ],
 
   arts: [
     [-1.8, 0.9, 0],
@@ -284,41 +130,9 @@ const CONSTELLATION_PATTERNS: Record<
     [-1.2, -1.3, 0.2],
   ],
 
-  music: [
-    [-1.9, 0.7, 0],
-    [-1.0, 1.5, 0.1],
-    [0.1, 0.8, -0.15],
-    [1.1, 1.4, 0],
-    [1.9, 0.2, 0.15],
-    [0.9, -1.4, -0.1],
-  ],
 
-  manufacturing: [
-    [-1.8, 0.9, 0],
-    [-0.9, 1.6, 0.15],
-    [0.8, 1.5, -0.1],
-    [1.8, 0.5, 0.1],
-    [0.9, -1.3, 0],
-    [-1.2, -1.4, 0.2],
-  ],
 
-  humanity: [
-    [-1.7, 0.6, 0],
-    [-0.8, 1.5, 0.1],
-    [0.9, 1.4, -0.15],
-    [1.8, 0.4, 0],
-    [0.8, -1.4, 0.15],
-    [-1.0, -1.3, -0.1],
-  ],
 
-  nature: [
-    [-1.8, 0.8, 0],
-    [-0.9, 1.6, 0.15],
-    [0.8, 1.5, -0.1],
-    [1.8, 0.5, 0.1],
-    [0.9, -1.4, 0],
-    [-1.1, -1.3, 0.2],
-  ],
 };
 
 function seededRandom(seed: number) {
@@ -865,26 +679,8 @@ function createDiscoveryStructure(
     case 'vedic':
       return createVedicStructure(discovery, index);
 
-    case 'nutrition':
-      return createNutritionStructure(discovery);
-
-    case 'physics':
-      return createPhysicsStructure(discovery);
-
-    case 'electronics':
-      return createElectronicsStructure(discovery);
-
     case 'arts':
       return createDrawingStructure(discovery);
-
-    case 'music':
-      return createMusicStructure(discovery);
-
-    case 'manufacturing':
-      return createManufacturingStructure(discovery);
-
-    case 'humanity':
-      return createHumanityStructure(discovery);
 
     default:
       return createVedicStructure(discovery, index);
@@ -1051,7 +847,15 @@ export function ConstellationUniverse3D() {
   }, []);
 
   const openLesson = () => {
-    router.push(`/games/${selectedDiscovery.subjectId}` as any);
+    if (selectedDiscovery.subjectId === 'vedic') {
+      router.push('/play/vedic-escape');
+      return;
+    }
+
+    if (selectedDiscovery.subjectId === 'arts') {
+      router.push('/play/arts-drawing');
+      return;
+    }
   };
 
   useEffect(() => {
@@ -1198,33 +1002,9 @@ export function ConstellationUniverse3D() {
         [-4.1, 0.8, -0.3],
       ],
 
-      nutrition: [
-        [3.6, 2.7, -0.4],
-        [2.8, 3.4, -0.2],
-        [4.4, 3.5, 0.1],
-        [4.8, 2.3, -0.2],
-        [3.0, 1.8, 0.2],
-        [4.1, 1.5, -0.1],
-      ],
-
-      physics: [
-        [4.0, -2.1, 0.2],
-        [3.0, -1.3, 0],
-        [4.9, -1.2, -0.2],
-        [5.1, -2.8, 0.1],
-        [3.1, -3.0, -0.2],
-        [4.0, -3.5, 0.2],
-      ],
-
-      electronics: [
-        [0.2, -3.4, -0.2],
-        [-0.8, -2.8, 0],
-        [1.1, -2.7, -0.2],
-        [1.3, -3.9, 0.1],
-        [-0.8, -4.0, 0.2],
-        [0.2, -4.5, -0.1],
-      ],
-
+    
+    
+    
       arts: [
         [-4.2, -2.3, 0.3],
         [-5.1, -1.6, 0],
@@ -1234,53 +1014,14 @@ export function ConstellationUniverse3D() {
         [-4.2, -3.7, 0.2],
       ],
 
-      music: [
-        [0.1, 3.8, 0.1],
-        [-0.9, 3.2, 0],
-        [1.1, 3.1, -0.2],
-        [1.2, 4.3, 0.1],
-        [-0.9, 4.5, -0.1],
-        [0.1, 4.9, 0.2],
-      ],
-
-      manufacturing: [
-        [-6.0, 1.0, -0.8],
-        [-6.9, 1.8, -0.5],
-        [-5.1, 2.0, -0.6],
-        [-7.0, 0.3, -0.9],
-        [-5.1, 0.0, -0.5],
-        [-6.0, -0.1, -0.7],
-      ],
-
-      humanity: [
-        [5.8, 0.5, -0.7],
-        [4.9, 1.3, -0.5],
-        [6.8, 1.4, -0.6],
-        [6.9, -0.4, -0.8],
-        [4.9, -0.9, -0.5],
-        [5.8, -1.1, -0.7],
-      ],
-
-      nature: [
-        [0.0, 5.8, -0.8],
-        [-0.9, 6.6, -0.5],
-        [0.9, 6.7, -0.6],
-        [1.4, 5.3, -0.9],
-        [-1.3, 5.0, -0.5],
-        [0.0, 4.7, -0.7],
-      ],
-    };
+    
+    
+    
+        };
 
     const subjectColors: Record<SubjectId, string> = {
       vedic: '#FFD166',
-      nutrition: '#67E8A5',
-      physics: '#70B7FF',
-      electronics: '#C58BFF',
       arts: '#FF75B8',
-      music: '#55E6FF',
-      manufacturing: '#FF9F68',
-      humanity: '#FFB6A3',
-      nature: '#8FE388',
     };
 
     Object.entries(constellationLayouts).forEach(
@@ -1456,7 +1197,7 @@ export function ConstellationUniverse3D() {
         /*
          * Physics orbit rings
          */
-        if (discovery.subjectId === 'physics') {
+        if (false) {
           structure.children.forEach((child) => {
             if (child.userData.orbit) {
               child.rotation.z += 0.008;

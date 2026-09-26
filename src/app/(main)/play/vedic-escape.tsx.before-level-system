@@ -1,0 +1,1562 @@
+import { GLView } from 'expo-gl';
+import { useRouter } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import {
+  Modal,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import * as THREE from 'three';
+
+const COLORS = {
+  background: '#FFF9F5',
+  wall: '#F1ECFA',
+  floor: '#F8E8DD',
+  wood: '#EBCFBD',
+  paper: '#FFFDF9',
+  clue: '#DCCFF4',
+  purple: '#8B6FC7',
+  purpleDark: '#7655B5',
+  charcoal: '#34313A',
+  peach: '#F3C7A9',
+  green: '#A9DCC7',
+  blue: '#BFD9F2',
+};
+
+function roundedBox(
+  width: number,
+  height: number,
+  depth: number,
+  color: string,
+  radius = 0.15,
+) {
+  const shape = new THREE.Shape();
+
+  const x = -width / 2;
+  const y = -height / 2;
+
+  shape.moveTo(x + radius, y);
+  shape.lineTo(x + width - radius, y);
+
+  shape.quadraticCurveTo(
+    x + width,
+    y,
+    x + width,
+    y + radius,
+  );
+
+  shape.lineTo(x + width, y + height - radius);
+
+  shape.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - radius,
+    y + height,
+  );
+
+  shape.lineTo(x + radius, y + height);
+
+  shape.quadraticCurveTo(
+    x,
+    y + height,
+    x,
+    y + height - radius,
+  );
+
+  shape.lineTo(x, y + radius);
+
+  shape.quadraticCurveTo(
+    x,
+    y,
+    x + radius,
+    y,
+  );
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSegments: 4,
+    bevelSize: Math.min(radius * 0.4, 0.08),
+    bevelThickness: Math.min(radius * 0.4, 0.08),
+  });
+
+  geometry.translate(0, 0, -depth / 2);
+
+  return new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.72,
+    }),
+  );
+}
+
+function makePaper(lines: string[]) {
+  const group = new THREE.Group();
+
+  const paper = roundedBox(
+    1.35,
+    0.95,
+    0.035,
+    COLORS.paper,
+    0.07,
+  );
+
+  group.add(paper);
+
+  const canvas = document.createElement('canvas');
+
+  canvas.width = 512;
+  canvas.height = 360;
+
+  const ctx = canvas.getContext('2d');
+
+  if (ctx) {
+    ctx.fillStyle = COLORS.paper;
+    ctx.fillRect(0, 0, 512, 360);
+
+    ctx.fillStyle = COLORS.charcoal;
+    ctx.textAlign = 'center';
+
+    lines.forEach((line, index) => {
+      ctx.font =
+        index === 0
+          ? 'bold 48px sans-serif'
+          : '32px sans-serif';
+
+      ctx.fillText(
+        line,
+        256,
+        105 + index * 65,
+      );
+    });
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  const image = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.25, 0.85),
+    new THREE.MeshBasicMaterial({
+      map: texture,
+    }),
+  );
+
+  image.position.z = 0.025;
+
+  group.add(image);
+
+  return group;
+}
+
+/* -------------------------------------------------------
+   SMART LOCK
+------------------------------------------------------- */
+
+function makeSmartLock() {
+  const group = new THREE.Group();
+
+  const body = roundedBox(
+    1.25,
+    1.65,
+    0.22,
+    COLORS.paper,
+    0.22,
+  );
+
+  group.add(body);
+
+  const screen = roundedBox(
+    0.82,
+    0.38,
+    0.04,
+    COLORS.blue,
+    0.09,
+  );
+
+  screen.position.set(0, 0.43, 0.14);
+
+  group.add(screen);
+
+  const sensor = new THREE.Mesh(
+    new THREE.CylinderGeometry(
+      0.28,
+      0.28,
+      0.05,
+      40,
+    ),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.purple,
+      roughness: 0.45,
+      emissive: COLORS.purple,
+      emissiveIntensity: 0.08,
+    }),
+  );
+
+  sensor.rotation.x = Math.PI / 2;
+
+  sensor.position.set(
+    0,
+    -0.12,
+    0.15,
+  );
+
+  group.add(sensor);
+
+  const sensorCenter = new THREE.Mesh(
+    new THREE.CylinderGeometry(
+      0.11,
+      0.11,
+      0.06,
+      32,
+    ),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.charcoal,
+    }),
+  );
+
+  sensorCenter.rotation.x = Math.PI / 2;
+
+  sensorCenter.position.set(
+    0,
+    -0.12,
+    0.19,
+  );
+
+  group.add(sensorCenter);
+
+  const led = new THREE.Mesh(
+    new THREE.SphereGeometry(
+      0.065,
+      20,
+      20,
+    ),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.green,
+      emissive: COLORS.green,
+      emissiveIntensity: 0.8,
+    }),
+  );
+
+  led.position.set(
+    0.43,
+    0.63,
+    0.15,
+  );
+
+  group.add(led);
+
+  return group;
+}
+
+/* -------------------------------------------------------
+   FUTURISTIC ROUNDED DOOR
+------------------------------------------------------- */
+
+function makeDoor() {
+  const group = new THREE.Group();
+
+  /*
+     Actual inverted-U frame.
+  */
+
+  const leftPillar = roundedBox(
+    0.34,
+    3.35,
+    0.38,
+    COLORS.purple,
+    0.15,
+  );
+
+  leftPillar.position.x = -1.35;
+
+  group.add(leftPillar);
+
+  const rightPillar = roundedBox(
+    0.34,
+    3.35,
+    0.38,
+    COLORS.purple,
+    0.15,
+  );
+
+  rightPillar.position.x = 1.35;
+
+  group.add(rightPillar);
+
+  /*
+     Curved top.
+  */
+
+  const arch = new THREE.Mesh(
+    new THREE.TorusGeometry(
+      1.35,
+      0.17,
+      20,
+      48,
+      Math.PI,
+    ),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.purple,
+      roughness: 0.55,
+    }),
+  );
+
+  arch.rotation.z = Math.PI;
+
+  arch.position.y = 1.68;
+
+  group.add(arch);
+
+  /*
+     Two futuristic sliding panels.
+  */
+
+  const leftDoor = roundedBox(
+    1.12,
+    2.7,
+    0.20,
+    COLORS.peach,
+    0.22,
+  );
+
+  leftDoor.position.set(
+    -0.56,
+    -0.05,
+    0,
+  );
+
+  leftDoor.userData.panel = 'left';
+
+  group.add(leftDoor);
+
+  const rightDoor = roundedBox(
+    1.12,
+    2.7,
+    0.20,
+    COLORS.peach,
+    0.22,
+  );
+
+  rightDoor.position.set(
+    0.56,
+    -0.05,
+    0,
+  );
+
+  rightDoor.userData.panel = 'right';
+
+  group.add(rightDoor);
+
+  /*
+     Inner futuristic glass panels.
+  */
+
+  const glassLeft = roundedBox(
+    0.82,
+    2.25,
+    0.035,
+    COLORS.wall,
+    0.16,
+  );
+
+  glassLeft.position.set(
+    -0.56,
+    -0.05,
+    0.12,
+  );
+
+  group.add(glassLeft);
+
+  const glassRight = roundedBox(
+    0.82,
+    2.25,
+    0.035,
+    COLORS.wall,
+    0.16,
+  );
+
+  glassRight.position.set(
+    0.56,
+    -0.05,
+    0.12,
+  );
+
+  group.add(glassRight);
+
+  /*
+     Central seam.
+  */
+
+  const seam = roundedBox(
+    0.07,
+    2.4,
+    0.05,
+    COLORS.purple,
+    0.03,
+  );
+
+  seam.position.set(
+    0,
+    -0.05,
+    0.17,
+  );
+
+  group.add(seam);
+
+  return group;
+}
+
+/* -------------------------------------------------------
+   ROOM
+------------------------------------------------------- */
+
+function buildRoom(
+  scene: THREE.Scene,
+  doorRef: React.MutableRefObject<THREE.Group | null>,
+) {
+  scene.background = new THREE.Color(
+    COLORS.background,
+  );
+
+  const ambient = new THREE.AmbientLight(
+    0xffffff,
+    2.4,
+  );
+
+  scene.add(ambient);
+
+  const light = new THREE.DirectionalLight(
+    0xffffff,
+    2.8,
+  );
+
+  light.position.set(
+    2,
+    7,
+    4,
+  );
+
+  scene.add(light);
+
+  /* FLOOR */
+
+  const floor = roundedBox(
+    12,
+    0.25,
+    11,
+    COLORS.floor,
+    0.2,
+  );
+
+  floor.position.y = -0.18;
+
+  scene.add(floor);
+
+  /* BACK WALL */
+
+  const backWall = roundedBox(
+    12,
+    5.6,
+    0.28,
+    COLORS.wall,
+    0.22,
+  );
+
+  backWall.position.set(
+    0,
+    2.55,
+    -5.4,
+  );
+
+  scene.add(backWall);
+
+  /* LEFT WALL */
+
+  const leftWall = roundedBox(
+    0.28,
+    5.6,
+    10.8,
+    COLORS.wall,
+    0.22,
+  );
+
+  leftWall.position.set(
+    -5.85,
+    2.55,
+    0,
+  );
+
+  scene.add(leftWall);
+
+  /* RIGHT WALL */
+
+  const rightWall = roundedBox(
+    0.28,
+    5.6,
+    10.8,
+    COLORS.wall,
+    0.22,
+  );
+
+  rightWall.position.set(
+    5.85,
+    2.55,
+    0,
+  );
+
+  scene.add(rightWall);
+
+  /* TABLE */
+
+  const table = roundedBox(
+    3.2,
+    0.35,
+    1.8,
+    COLORS.wood,
+    0.18,
+  );
+
+  table.position.set(
+    -2.2,
+    1.05,
+    -1.2,
+  );
+
+  scene.add(table);
+
+  /* FIRST CLUE */
+
+  const clue1 = makePaper([
+    '98 × 97',
+    '95 | 06',
+  ]);
+
+  clue1.position.set(
+    -2.2,
+    1.27,
+    -1.2,
+  );
+
+  clue1.rotation.x = -Math.PI / 2;
+
+  scene.add(clue1);
+
+  /* SECOND CLUE */
+
+  const clue2 = makePaper([
+    '97 × 96',
+    '93 | 12',
+  ]);
+
+  clue2.position.set(
+    -2.2,
+    1.28,
+    -0.58,
+  );
+
+  clue2.rotation.x = -Math.PI / 2;
+
+  scene.add(clue2);
+
+  /* BIG SMART LOCK */
+
+  const smartLock = makeSmartLock();
+
+  smartLock.position.set(
+    3.8,
+    1.7,
+    -5.02,
+  );
+
+  /*
+     Face toward the player.
+  */
+
+  smartLock.rotation.y = 0;
+
+  scene.add(smartLock);
+
+  /* LOCKER */
+
+  const locker = roundedBox(
+    1.75,
+    2.55,
+    0.75,
+    COLORS.wood,
+    0.18,
+  );
+
+  locker.position.set(
+    3.8,
+    1.25,
+    -3.7,
+  );
+
+  scene.add(locker);
+
+  /* DECORATIVE NUMBER BLOCKS */
+
+  for (let i = 0; i < 3; i++) {
+    const block = roundedBox(
+      0.55,
+      0.55,
+      0.22,
+      COLORS.clue,
+      0.12,
+    );
+
+    block.position.set(
+      1.8 + i * 0.7,
+      0.4,
+      -2.7,
+    );
+
+    scene.add(block);
+  }
+
+  /* FUTURISTIC DOOR */
+
+  const door = makeDoor();
+
+  door.position.set(
+    0,
+    1.55,
+    -5.1,
+  );
+
+  scene.add(door);
+
+  doorRef.current = door;
+}
+
+/* -------------------------------------------------------
+   GAME
+------------------------------------------------------- */
+
+export default function VedicEscape() {
+  const router = useRouter();
+
+  const cameraRef =
+    useRef<THREE.PerspectiveCamera | null>(null);
+
+  const rendererRef =
+    useRef<THREE.WebGLRenderer | null>(null);
+
+  const doorRef =
+    useRef<THREE.Group | null>(null);
+
+  const player = useRef({
+    x: 0,
+    z: 3.4,
+  });
+
+  const yaw = useRef(0);
+
+  const pitch = useRef(-0.08);
+
+  const lookTouch = useRef({
+    active: false,
+    x: 0,
+    y: 0,
+  });
+
+  const [message, setMessage] =
+    useState(
+      'Swipe anywhere in the room to look around.',
+    );
+
+  const [lockOpen, setLockOpen] =
+    useState(false);
+
+  const [code, setCode] =
+    useState('');
+
+  const [escaped, setEscaped] =
+    useState(false);
+
+  const move = (
+    forward: number,
+    sideways: number,
+  ) => {
+    const angle = yaw.current;
+
+    const forwardX =
+      -Math.sin(angle);
+
+    const forwardZ =
+      -Math.cos(angle);
+
+    const rightX =
+      Math.cos(angle);
+
+    const rightZ =
+      -Math.sin(angle);
+
+    player.current.x +=
+      forwardX * forward +
+      rightX * sideways;
+
+    player.current.z +=
+      forwardZ * forward +
+      rightZ * sideways;
+
+    player.current.x = Math.max(
+      -5,
+      Math.min(5, player.current.x),
+    );
+
+    player.current.z = Math.max(
+      -4.7,
+      Math.min(4.7, player.current.z),
+    );
+
+    if (cameraRef.current) {
+      cameraRef.current.position.x =
+        player.current.x;
+
+      cameraRef.current.position.z =
+        player.current.z;
+    }
+
+    setMessage(
+      `PLAYER  X ${player.current.x.toFixed(
+        1,
+      )}   Z ${player.current.z.toFixed(1)}`,
+    );
+  };
+
+  const submitCode = () => {
+    if (code === '9312') {
+      setLockOpen(true);
+      setMessage(
+        'SMART LOCK OPEN — THE EXIT IS REVEALED.',
+      );
+
+      if (doorRef.current) {
+        const left = doorRef.current.children.find(
+          child =>
+            child.userData.panel === 'left',
+        );
+
+        const right =
+          doorRef.current.children.find(
+            child =>
+              child.userData.panel === 'right',
+          );
+
+        if (left) {
+          left.position.x = -1.15;
+        }
+
+        if (right) {
+          right.position.x = 1.15;
+        }
+      }
+
+      setCode('');
+      return;
+    }
+
+    setMessage('That code is not correct.');
+    setCode('');
+  };
+
+  const interact = () => {
+    const x = player.current.x;
+    const z = player.current.z;
+
+    const nearLock =
+      Math.abs(x - 3.8) < 2 &&
+      Math.abs(z + 5) < 2;
+
+    const nearDoor =
+      Math.abs(x) < 2 &&
+      Math.abs(z + 5) < 2;
+
+    if (nearLock) {
+      setLockOpen(false);
+      setCode('');
+      setLockOpen(true);
+      return;
+    }
+
+    if (nearDoor && lockOpen) {
+      setEscaped(true);
+      setMessage(
+        'ESCAPE COMPLETE — THE NUMBER TEMPLE OPENS.',
+      );
+      return;
+    }
+
+    if (nearDoor) {
+      setMessage(
+        'The futuristic door is sealed. Find the smart lock.',
+      );
+      return;
+    }
+
+    setMessage(
+      'Explore the room. Look for clues.',
+    );
+  };
+
+  const onContextCreate = async (
+    gl: any,
+  ) => {
+    const scene = new THREE.Scene();
+
+    const width =
+      gl.drawingBufferWidth;
+
+    const height =
+      gl.drawingBufferHeight;
+
+    const camera =
+      new THREE.PerspectiveCamera(
+        68,
+        width / height,
+        0.1,
+        100,
+      );
+
+    camera.position.set(
+      player.current.x,
+      1.65,
+      player.current.z,
+    );
+
+    cameraRef.current = camera;
+
+    const renderer =
+      new THREE.WebGLRenderer({
+        context: gl,
+        antialias: true,
+      });
+
+    renderer.setSize(
+      width,
+      height,
+      false,
+    );
+
+    renderer.setPixelRatio(1);
+
+    rendererRef.current = renderer;
+
+    buildRoom(
+      scene,
+      doorRef,
+    );
+
+    const animate = () => {
+      requestAnimationFrame(
+        animate,
+      );
+
+      if (cameraRef.current) {
+        const cam =
+          cameraRef.current;
+
+        cam.rotation.order =
+          'YXZ';
+
+        cam.rotation.y =
+          yaw.current;
+
+        cam.rotation.x =
+          pitch.current;
+
+        cam.position.x =
+          player.current.x;
+
+        cam.position.z =
+          player.current.z;
+      }
+
+      renderer.render(
+        scene,
+        camera,
+      );
+
+      gl.endFrameEXP();
+    };
+
+    animate();
+  };
+
+  const handleLookStart = (
+    event: any,
+  ) => {
+    lookTouch.current.active =
+      true;
+
+    lookTouch.current.x =
+      event.nativeEvent.pageX;
+
+    lookTouch.current.y =
+      event.nativeEvent.pageY;
+  };
+
+  const handleLookMove = (
+    event: any,
+  ) => {
+    if (!lookTouch.current.active) {
+      return;
+    }
+
+    const x =
+      event.nativeEvent.pageX;
+
+    const y =
+      event.nativeEvent.pageY;
+
+    const dx =
+      x - lookTouch.current.x;
+
+    const dy =
+      y - lookTouch.current.y;
+
+    lookTouch.current.x = x;
+    lookTouch.current.y = y;
+
+    yaw.current -= dx * 0.008;
+
+    pitch.current -= dy * 0.005;
+
+    pitch.current = Math.max(
+      -0.8,
+      Math.min(
+        0.45,
+        pitch.current,
+      ),
+    );
+  };
+
+  const handleLookEnd = () => {
+    lookTouch.current.active =
+      false;
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable
+            style={styles.back}
+            onPress={() =>
+              router.back()
+            }
+          >
+            <Text style={styles.backText}>
+              ‹
+            </Text>
+          </Pressable>
+
+          <View>
+            <Text style={styles.title}>
+              VEDIC MATHS
+            </Text>
+
+            <Text style={styles.subtitle}>
+              THE NUMBER TEMPLE
+            </Text>
+          </View>
+
+          <View style={styles.viewBadge}>
+            <Text style={styles.viewBadgeText}>
+              360°
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.game}>
+          <GLView
+            style={StyleSheet.absoluteFill}
+            onContextCreate={
+              onContextCreate
+            }
+            onTouchStart={
+              handleLookStart
+            }
+            onTouchMove={
+              handleLookMove
+            }
+            onTouchEnd={
+              handleLookEnd
+            }
+            onTouchCancel={
+              handleLookEnd
+            }
+          />
+
+          <View
+            pointerEvents="box-none"
+            style={styles.overlay}
+          >
+            <View style={styles.message}>
+              <Text
+                style={styles.messageText}
+              >
+                {message}
+              </Text>
+            </View>
+
+            <View style={styles.bottom}>
+              <View style={styles.dpad}>
+                <Pressable
+                  style={styles.direction}
+                  onPress={() =>
+                    move(0.45, 0)
+                  }
+                >
+                  <Text
+                    style={styles.arrow}
+                  >
+                    ▲
+                  </Text>
+                </Pressable>
+
+                <View
+                  style={
+                    styles.horizontal
+                  }
+                >
+                  <Pressable
+                    style={styles.direction}
+                    onPress={() =>
+                      move(0, -0.45)
+                    }
+                  >
+                    <Text
+                      style={styles.arrow}
+                    >
+                      ◀
+                    </Text>
+                  </Pressable>
+
+                  <View
+                    style={styles.center}
+                  >
+                    <Text
+                      style={
+                        styles.centerText
+                      }
+                    >
+                      MOVE
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    style={styles.direction}
+                    onPress={() =>
+                      move(0, 0.45)
+                    }
+                  >
+                    <Text
+                      style={styles.arrow}
+                    >
+                      ▶
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <Pressable
+                  style={styles.direction}
+                  onPress={() =>
+                    move(-0.45, 0)
+                  }
+                >
+                  <Text
+                    style={styles.arrow}
+                  >
+                    ▼
+                  </Text>
+                </Pressable>
+              </View>
+
+              <Pressable
+                style={styles.interact}
+                onPress={interact}
+              >
+                <Text
+                  style={styles.interactText}
+                >
+                  INTERACT
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
+        <Modal
+          visible={lockOpen && !escaped}
+          transparent
+          animationType="fade"
+          onRequestClose={() =>
+            setLockOpen(false)
+          }
+        >
+          <View
+            style={styles.modalBackground}
+          >
+            <View style={styles.lockPanel}>
+              <Text
+                style={styles.lockTitle}
+              >
+                SMART LOCK
+              </Text>
+
+              <Text
+                style={styles.lockHint}
+              >
+                Enter the Vedic Maths code
+              </Text>
+
+              <View
+                style={styles.codeDisplay}
+              >
+                <Text
+                  style={
+                    styles.codeDisplayText
+                  }
+                >
+                  {code || '••••'}
+                </Text>
+              </View>
+
+              <View
+                style={styles.keypad}
+              >
+                {[
+                  '1',
+                  '2',
+                  '3',
+                  '4',
+                  '5',
+                  '6',
+                  '7',
+                  '8',
+                  '9',
+                  '0',
+                ].map(number => (
+                  <Pressable
+                    key={number}
+                    style={styles.key}
+                    onPress={() => {
+                      if (
+                        code.length < 4
+                      ) {
+                        setCode(
+                          previous =>
+                            previous +
+                            number,
+                        );
+                      }
+                    }}
+                  >
+                    <Text
+                      style={styles.keyText}
+                    >
+                      {number}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View
+                style={styles.lockActions}
+              >
+                <Pressable
+                  style={styles.cancel}
+                  onPress={() =>
+                    setLockOpen(false)
+                  }
+                >
+                  <Text
+                    style={styles.cancelText}
+                  >
+                    CLOSE
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.unlock}
+                  onPress={
+                    submitCode
+                  }
+                >
+                  <Text
+                    style={
+                      styles.unlockText
+                    }
+                  >
+                    UNLOCK
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={escaped}
+          transparent
+          animationType="fade"
+        >
+          <View
+            style={styles.modalBackground}
+          >
+            <View style={styles.escapePanel}>
+              <Text
+                style={styles.escapeEmoji}
+              >
+                ✦
+              </Text>
+
+              <Text
+                style={styles.escapeTitle}
+              >
+                NUMBER TEMPLE OPEN
+              </Text>
+
+              <Text
+                style={styles.escapeText}
+              >
+                You found the pattern,
+                opened the smart lock,
+                and escaped.
+              </Text>
+
+              <Pressable
+                style={styles.unlock}
+                onPress={() =>
+                  router.back()
+                }
+              >
+                <Text
+                  style={
+                    styles.unlockText
+                  }
+                >
+                  RETURN
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor:
+      COLORS.background,
+  },
+
+  container: {
+    flex: 1,
+    backgroundColor:
+      COLORS.background,
+  },
+
+  header: {
+    height: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    gap: 14,
+  },
+
+  back: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor:
+      COLORS.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  backText: {
+    fontSize: 32,
+    color: COLORS.charcoal,
+  },
+
+  title: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: COLORS.charcoal,
+  },
+
+  subtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: COLORS.purpleDark,
+  },
+
+  viewBadge: {
+    marginLeft: 'auto',
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 18,
+    backgroundColor:
+      COLORS.paper,
+  },
+
+  viewBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.purpleDark,
+  },
+
+  game: {
+    flex: 1,
+    overflow: 'hidden',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  },
+
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent:
+      'space-between',
+    padding: 18,
+  },
+
+  message: {
+    alignSelf: 'center',
+    maxWidth: '82%',
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 20,
+    backgroundColor:
+      'rgba(255,253,249,0.94)',
+  },
+
+  messageText: {
+    color: COLORS.charcoal,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  bottom: {
+    flexDirection: 'row',
+    justifyContent:
+      'space-between',
+    alignItems: 'flex-end',
+  },
+
+  dpad: {
+    alignItems: 'center',
+  },
+
+  horizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  direction: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor:
+      'rgba(255,253,249,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 4,
+  },
+
+  arrow: {
+    fontSize: 23,
+    fontWeight: '800',
+    color: COLORS.purpleDark,
+  },
+
+  center: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor:
+      'rgba(220,207,244,0.96)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  centerText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: COLORS.purpleDark,
+  },
+
+  interact: {
+    width: 130,
+    height: 58,
+    borderRadius: 22,
+    backgroundColor:
+      COLORS.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  interactText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+
+  modalBackground: {
+    flex: 1,
+    backgroundColor:
+      'rgba(52,49,58,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+
+  lockPanel: {
+    width: '100%',
+    maxWidth: 380,
+    padding: 24,
+    borderRadius: 30,
+    backgroundColor:
+      COLORS.paper,
+  },
+
+  lockTitle: {
+    fontSize: 21,
+    fontWeight: '900',
+    color: COLORS.charcoal,
+    textAlign: 'center',
+  },
+
+  lockHint: {
+    marginTop: 7,
+    textAlign: 'center',
+    color: COLORS.purpleDark,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  codeDisplay: {
+    height: 64,
+    marginTop: 20,
+    borderRadius: 18,
+    backgroundColor:
+      COLORS.wall,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  codeDisplayText: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 7,
+    color: COLORS.charcoal,
+  },
+
+  keypad: {
+    marginTop: 18,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 9,
+  },
+
+  key: {
+    width: 68,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor:
+      '#EEE8F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  keyText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.charcoal,
+  },
+
+  lockActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+
+  cancel: {
+    flex: 1,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor:
+      COLORS.wall,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  cancelText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.charcoal,
+  },
+
+  unlock: {
+    flex: 1,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor:
+      COLORS.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  unlockText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+
+  escapePanel: {
+    width: '100%',
+    maxWidth: 380,
+    padding: 28,
+    borderRadius: 30,
+    backgroundColor:
+      COLORS.paper,
+    alignItems: 'center',
+  },
+
+  escapeEmoji: {
+    fontSize: 46,
+    color: COLORS.purple,
+  },
+
+  escapeTitle: {
+    marginTop: 12,
+    fontSize: 21,
+    fontWeight: '900',
+    textAlign: 'center',
+    color: COLORS.charcoal,
+  },
+
+  escapeText: {
+    marginTop: 12,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    color: COLORS.charcoal,
+  },
+});

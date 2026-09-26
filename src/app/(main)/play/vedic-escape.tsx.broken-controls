@@ -1,0 +1,1352 @@
+import { GLView } from 'expo-gl';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import * as THREE from 'three';
+
+const COLORS = {
+  background: '#FFF9F5',
+  wall: '#F1ECFA',
+  floor: '#F8E8DD',
+  wood: '#EBCFBD',
+  paper: '#FFFDF9',
+  clue: '#DCCFF4',
+  purple: '#8B6FC7',
+  purpleDark: '#7655B5',
+  charcoal: '#34313A',
+  peach: '#F3C7A9',
+  person: '#A99ADB',
+  skin: '#F2C6A8',
+  green: '#A9DCC7',
+  blue: '#BFD9F2',
+};
+
+type Clue = {
+  id: number;
+  title: string;
+  lines: string[];
+};
+
+const CLUES: Clue[] = [
+  {
+    id: 1,
+    title: 'NUMBER NOTE',
+    lines: [
+      '98 × 97',
+      '',
+      '98 → 100 − 2',
+      '97 → 100 − 3',
+      '',
+      '95 | 06',
+    ],
+  },
+  {
+    id: 2,
+    title: 'SECOND NOTE',
+    lines: [
+      '97 × 96',
+      '',
+      '100 − 3 − 4 = 93',
+      '3 × 4 = 12',
+      '',
+      '93 | 12',
+    ],
+  },
+];
+
+const CODE = '9312';
+
+function roundedBox(
+  width: number,
+  height: number,
+  depth: number,
+  color: string,
+  radius = 0.15,
+) {
+  const shape = new THREE.Shape();
+
+  const x = -width / 2;
+  const y = -height / 2;
+  const r = Math.min(radius, width / 2, height / 2);
+
+  shape.moveTo(x + r, y);
+  shape.lineTo(x + width - r, y);
+  shape.quadraticCurveTo(x + width, y, x + width, y + r);
+  shape.lineTo(x + width, y + height - r);
+  shape.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - r,
+    y + height,
+  );
+  shape.lineTo(x + r, y + height);
+  shape.quadraticCurveTo(x, y + height, x, y + height - r);
+  shape.lineTo(x, y + r);
+  shape.quadraticCurveTo(x, y, x + r, y);
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    bevelSize: 0.04,
+    bevelThickness: 0.04,
+  });
+
+  geometry.center();
+
+  return new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.75,
+    }),
+  );
+}
+
+function makeCylinder(
+  radius: number,
+  height: number,
+  color: string,
+  segments = 24,
+) {
+  return new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, height, segments),
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.65,
+    }),
+  );
+}
+
+function makePaper(title: string, position: THREE.Vector3) {
+  const group = new THREE.Group();
+
+  const paper = roundedBox(1.15, 1.45, 0.08, COLORS.paper, 0.08);
+  group.add(paper);
+
+  const line1 = roundedBox(0.72, 0.055, 0.02, COLORS.charcoal, 0.02);
+  line1.position.set(0, 0.35, 0.055);
+  group.add(line1);
+
+  const line2 = roundedBox(0.58, 0.045, 0.02, COLORS.purple, 0.02);
+  line2.position.set(0, 0.08, 0.055);
+  group.add(line2);
+
+  const line3 = roundedBox(0.65, 0.045, 0.02, COLORS.charcoal, 0.02);
+  line3.position.set(0, -0.18, 0.055);
+  group.add(line3);
+
+  const marker = roundedBox(0.35, 0.12, 0.04, COLORS.clue, 0.04);
+  marker.position.set(0, -0.48, 0.07);
+  group.add(marker);
+
+  group.position.copy(position);
+  group.rotation.x = -0.12;
+
+  group.userData.interaction = 'clue';
+  group.userData.title = title;
+
+  return group;
+}
+
+function makeAbacus(position: THREE.Vector3) {
+  const group = new THREE.Group();
+
+  const base = roundedBox(1.35, 0.18, 0.65, COLORS.wood, 0.08);
+  base.position.y = 0.1;
+  group.add(base);
+
+  for (let i = -1; i <= 1; i += 1) {
+    const rod = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.025, 0.85, 12),
+      new THREE.MeshStandardMaterial({
+        color: COLORS.purpleDark,
+      }),
+    );
+
+    rod.rotation.z = Math.PI / 2;
+    rod.position.set(0, 0.38 + i * 0.22, 0);
+    group.add(rod);
+
+    for (let bead = 0; bead < 3; bead += 1) {
+      const ball = makeCylinder(0.11, 0.16, bead % 2 ? COLORS.peach : COLORS.purple);
+      ball.rotation.z = Math.PI / 2;
+      ball.position.set(-0.35 + bead * 0.28, 0.38 + i * 0.22, 0);
+      group.add(ball);
+    }
+  }
+
+  group.position.copy(position);
+  group.userData.interaction = 'abacus';
+
+  return group;
+}
+
+function makeSmartLock(position: THREE.Vector3) {
+  const group = new THREE.Group();
+
+  const body = roundedBox(0.95, 1.25, 0.22, COLORS.paper, 0.18);
+  group.add(body);
+
+  const screen = roundedBox(0.65, 0.32, 0.03, COLORS.blue, 0.08);
+  screen.position.z = 0.14;
+  screen.position.y = 0.25;
+  group.add(screen);
+
+  const center = makeCylinder(0.19, 0.05, COLORS.purple, 32);
+  center.rotation.x = Math.PI / 2;
+  center.position.set(0, -0.18, 0.15);
+  group.add(center);
+
+  const inner = makeCylinder(0.07, 0.06, COLORS.charcoal, 24);
+  inner.rotation.x = Math.PI / 2;
+  inner.position.set(0, -0.18, 0.18);
+  group.add(inner);
+
+  const led = makeCylinder(0.055, 0.04, COLORS.green, 20);
+  led.rotation.x = Math.PI / 2;
+  led.position.set(0.28, 0.43, 0.16);
+  group.add(led);
+
+  group.position.copy(position);
+  group.userData.interaction = 'lock';
+
+  return group;
+}
+
+function makeArchDoor(position: THREE.Vector3) {
+  const group = new THREE.Group();
+
+  const left = roundedBox(0.55, 4.9, 0.35, COLORS.clue, 0.18);
+  left.position.x = -2.05;
+  group.add(left);
+
+  const right = roundedBox(0.55, 4.9, 0.35, COLORS.clue, 0.18);
+  right.position.x = 2.05;
+  group.add(right);
+
+  const top = makeCylinder(2.05, 0.35, COLORS.clue, 32);
+  top.rotation.z = Math.PI / 2;
+  top.scale.y = 0.55;
+  top.position.y = 2.45;
+  group.add(top);
+
+  const door = new THREE.Group();
+
+  const panel = roundedBox(3.7, 4.35, 0.22, COLORS.peach, 0.28);
+  panel.position.y = -0.05;
+  door.add(panel);
+
+  const inset = roundedBox(3.05, 3.7, 0.06, COLORS.wall, 0.22);
+  inset.position.z = 0.15;
+  inset.position.y = -0.05;
+  door.add(inset);
+
+  const handle = makeCylinder(0.13, 0.12, COLORS.purpleDark, 28);
+  handle.rotation.x = Math.PI / 2;
+  handle.position.set(1.35, -0.1, 0.23);
+  door.add(handle);
+
+  door.position.set(0, 0, 0.2);
+  group.add(door);
+
+  group.position.copy(position);
+  group.userData.interaction = 'door';
+  group.userData.door = door;
+
+  return group;
+}
+
+function makePerson(position: THREE.Vector3) {
+  const group = new THREE.Group();
+
+  const body = makeCylinder(0.34, 0.9, COLORS.person, 20);
+  body.position.y = 1.05;
+  group.add(body);
+
+  const head = makeCylinder(0.28, 0.28, COLORS.skin, 20);
+  head.position.y = 1.72;
+  group.add(head);
+
+  const leg1 = roundedBox(0.18, 0.72, 0.18, COLORS.purpleDark, 0.08);
+  leg1.position.set(-0.15, 0.35, 0);
+  group.add(leg1);
+
+  const leg2 = roundedBox(0.18, 0.72, 0.18, COLORS.purpleDark, 0.08);
+  leg2.position.set(0.15, 0.35, 0);
+  group.add(leg2);
+
+  group.position.copy(position);
+
+  return group;
+}
+
+export default function VedicEscapeRoom() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ level?: string }>();
+
+  const [activeClue, setActiveClue] = useState<number | null>(null);
+  const [smartLockOpen, setSmartLockOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const [hasKey, setHasKey] = useState(false);
+  const [escaped, setEscaped] = useState(false);
+  const [nearObject, setNearObject] = useState('');
+  const [wrongCode, setWrongCode] = useState(false);
+
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const animationRef = useRef<number | null>(null);
+
+  const doorRef = useRef<THREE.Group | null>(null);
+  const personRef = useRef<THREE.Group | null>(null);
+  const keyRef = useRef<THREE.Group | null>(null);
+
+  const clueOneRef = useRef<THREE.Group | null>(null);
+  const clueTwoRef = useRef<THREE.Group | null>(null);
+  const lockRef = useRef<THREE.Group | null>(null);
+
+  const yawRef = useRef(0);
+  const pitchRef = useRef(-0.03);
+
+  const joystickRef = useRef<{
+    active: boolean;
+    x: number;
+    y: number;
+    startX: number;
+    startY: number;
+  }>({
+    active: false,
+    x: 0,
+    y: 0,
+    startX: 0,
+    startY: 0,
+  });
+
+  const lookRef = useRef({
+    active: false,
+    x: 0,
+    y: 0,
+  });
+
+  const hasKeyRef = useRef(false);
+  const escapedRef = useRef(false);
+
+  useEffect(() => {
+    hasKeyRef.current = hasKey;
+  }, [hasKey]);
+
+  useEffect(() => {
+    escapedRef.current = escaped;
+  }, [escaped]);
+
+  const onContextCreate = async (gl: any) => {
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(COLORS.background);
+    sceneRef.current = scene;
+
+    const camera = new THREE.PerspectiveCamera(
+      65,
+      width / height,
+      0.1,
+      100,
+    );
+
+    camera.position.set(0, 1.65, 4.3);
+    cameraRef.current = camera;
+
+    const renderer = new THREE.WebGLRenderer({
+      context: gl,
+      antialias: true,
+    });
+
+    renderer.setSize(width, height, false);
+    renderer.setPixelRatio(1);
+    rendererRef.current = renderer;
+
+    const ambient = new THREE.AmbientLight('#FFFFFF', 2.4);
+    scene.add(ambient);
+
+    const light = new THREE.DirectionalLight('#FFFFFF', 2.2);
+    light.position.set(3, 7, 4);
+    scene.add(light);
+
+    const room = new THREE.Group();
+    scene.add(room);
+
+    const floor = roundedBox(12, 0.25, 11, COLORS.floor, 0.15);
+    floor.position.set(0, -0.15, -0.5);
+    room.add(floor);
+
+    const backWall = roundedBox(12, 7, 0.25, COLORS.wall, 0.2);
+    backWall.position.set(0, 3.4, -6);
+    room.add(backWall);
+
+    const leftWall = roundedBox(0.25, 7, 11, COLORS.wall, 0.2);
+    leftWall.position.set(-6, 3.4, -0.5);
+    room.add(leftWall);
+
+    const rightWall = roundedBox(0.25, 7, 11, COLORS.wall, 0.2);
+    rightWall.position.set(6, 3.4, -0.5);
+    room.add(rightWall);
+
+    const ceiling = roundedBox(12, 0.2, 11, COLORS.background, 0.12);
+    ceiling.position.set(0, 7, -0.5);
+    room.add(ceiling);
+
+    const tableTop = roundedBox(2.8, 0.25, 1.45, COLORS.wood, 0.16);
+    tableTop.position.set(-2.8, 1.25, -2.1);
+    room.add(tableTop);
+
+    for (const x of [-3.85, -1.75]) {
+      const leg = roundedBox(0.2, 1.25, 0.2, COLORS.wood, 0.08);
+      leg.position.set(x, 0.58, -2.1);
+      room.add(leg);
+    }
+
+    const clueOne = makePaper('NUMBER NOTE', new THREE.Vector3(-3.25, 1.45, -2.1));
+    clueOneRef.current = clueOne;
+    room.add(clueOne);
+
+    const clueTwo = makePaper(
+      'SECOND NOTE',
+      new THREE.Vector3(2.1, 1.15, -1.5),
+    );
+    clueTwoRef.current = clueTwo;
+    room.add(clueTwo);
+
+    const abacus = makeAbacus(new THREE.Vector3(-1.1, 0.05, -2.1));
+    room.add(abacus);
+
+    const smartLock = makeSmartLock(new THREE.Vector3(4.25, 1.65, -3.8));
+    lockRef.current = smartLock;
+    room.add(smartLock);
+
+    const locker = roundedBox(1.65, 2.7, 0.75, COLORS.paper, 0.2);
+    locker.position.set(4.2, 1.35, -3.8);
+    room.add(locker);
+
+    const lockerPanel = roundedBox(1.15, 1.6, 0.06, COLORS.wall, 0.15);
+    lockerPanel.position.set(4.2, 1.4, -3.38);
+    room.add(lockerPanel);
+
+    const numbers = ['9', '3', '1', '2'];
+
+    numbers.forEach((number, index) => {
+      const block = roundedBox(0.65, 0.65, 0.25, COLORS.clue, 0.16);
+      block.position.set(-4 + index * 1.15, 4.65, -5.78);
+      room.add(block);
+
+      const marker = roundedBox(0.18, 0.18, 0.03, COLORS.purple, 0.04);
+      marker.position.set(-4 + index * 1.15, 4.65, -5.62);
+      room.add(marker);
+
+      void number;
+    });
+
+    const door = makeArchDoor(new THREE.Vector3(0, 2.45, -5.65));
+    doorRef.current = door.userData.door as THREE.Group;
+    room.add(door);
+
+    const person = makePerson(new THREE.Vector3(0, 0, -0.8));
+    personRef.current = person;
+    room.add(person);
+
+    const keyGroup = new THREE.Group();
+
+    const keyRing = makeCylinder(0.13, 0.06, COLORS.purpleDark, 24);
+    keyRing.rotation.x = Math.PI / 2;
+    keyGroup.add(keyRing);
+
+    const keyStem = roundedBox(0.65, 0.09, 0.08, COLORS.purple, 0.04);
+    keyStem.position.x = 0.38;
+    keyGroup.add(keyStem);
+
+    keyGroup.position.set(4.2, 2.5, -3.15);
+    keyGroup.visible = false;
+    keyRef.current = keyGroup;
+    room.add(keyGroup);
+
+    const symbols = [
+      { text: '+', x: -4.5, y: 3.1 },
+      { text: '×', x: 4.7, y: 4.2 },
+      { text: '100', x: 0, y: 5.1 },
+    ];
+
+    symbols.forEach((symbol) => {
+      const geometry = new THREE.BufferGeometry();
+      const material = new THREE.PointsMaterial({
+        color: COLORS.purple,
+        size: 0.14,
+      });
+
+      const points = new THREE.Points(geometry, material);
+      points.position.set(symbol.x, symbol.y, -5.7);
+      room.add(points);
+    });
+
+    const clock = new THREE.Clock();
+
+    const animate = () => {
+      animationRef.current = requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.05);
+      const move = joystickRef.current;
+
+      if (cameraRef.current) {
+        const camera = cameraRef.current;
+
+        const forward = new THREE.Vector3(
+          Math.sin(yawRef.current),
+          0,
+          -Math.cos(yawRef.current),
+        );
+
+        const right = new THREE.Vector3(
+          Math.cos(yawRef.current),
+          0,
+          Math.sin(yawRef.current),
+        );
+
+        const speed = 2.6 * delta;
+
+        camera.position.addScaledVector(forward, -move.y * speed);
+        camera.position.addScaledVector(right, move.x * speed);
+
+        camera.position.x = THREE.MathUtils.clamp(
+          camera.position.x,
+          -5.15,
+          5.15,
+        );
+
+        camera.position.z = THREE.MathUtils.clamp(
+          camera.position.z,
+          -5.15,
+          4.5,
+        );
+
+        camera.position.y = 1.65;
+
+        const lookDistance = 5;
+
+        const lookX =
+          Math.sin(yawRef.current) *
+          Math.cos(pitchRef.current) *
+          lookDistance;
+
+        const lookY =
+          camera.position.y +
+          Math.sin(pitchRef.current) * lookDistance;
+
+        const lookZ =
+          -Math.cos(yawRef.current) *
+          Math.cos(pitchRef.current) *
+          lookDistance;
+
+        camera.lookAt(
+          camera.position.x + lookX,
+          lookY,
+          camera.position.z + lookZ,
+        );
+      }
+
+      if (clueOneRef.current) {
+        clueOneRef.current.rotation.z =
+          Math.sin(Date.now() * 0.001) * 0.015;
+      }
+
+      if (clueTwoRef.current) {
+        clueTwoRef.current.rotation.z =
+          Math.sin(Date.now() * 0.0012 + 1) * 0.018;
+      }
+
+      if (keyRef.current && hasKeyRef.current) {
+        keyRef.current.visible = true;
+        keyRef.current.rotation.y += delta * 1.8;
+        keyRef.current.position.y =
+          2.45 + Math.sin(Date.now() * 0.003) * 0.08;
+      }
+
+      if (escapedRef.current && doorRef.current) {
+        doorRef.current.rotation.y = THREE.MathUtils.lerp(
+          doorRef.current.rotation.y,
+          -Math.PI * 0.48,
+          delta * 2.5,
+        );
+      }
+
+      if (escapedRef.current && personRef.current) {
+        personRef.current.position.z -= delta * 0.7;
+      }
+
+      renderer.render(scene, camera);
+      gl.endFrameEXP();
+    };
+
+    animate();
+  };
+
+  useEffect(() => {
+    return () => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+      }
+
+      rendererRef.current?.dispose();
+    };
+  }, []);
+
+  const interact = () => {
+    const camera = cameraRef.current;
+
+    if (!camera) {
+      return;
+    }
+
+    const forward = new THREE.Vector3(
+      Math.sin(yawRef.current),
+      0,
+      -Math.cos(yawRef.current),
+    );
+
+    const player = camera.position;
+
+    const objects = [
+      {
+        name: 'clue1',
+        position: clueOneRef.current?.position,
+        distance: 1.8,
+      },
+      {
+        name: 'clue2',
+        position: clueTwoRef.current?.position,
+        distance: 1.8,
+      },
+      {
+        name: 'lock',
+        position: lockRef.current?.position,
+        distance: 2.2,
+      },
+      {
+        name: 'door',
+        position: new THREE.Vector3(0, 1.65, -5.2),
+        distance: 2.3,
+      },
+    ];
+
+    let closest = '';
+    let closestDistance = Infinity;
+
+    objects.forEach((object) => {
+      if (!object.position) {
+        return;
+      }
+
+      const distance = player.distanceTo(object.position);
+
+      if (distance > object.distance) {
+        return;
+      }
+
+      const direction = object.position.clone().sub(player).normalize();
+      const facing = direction.dot(forward);
+
+      if (facing < 0.2) {
+        return;
+      }
+
+      if (distance < closestDistance) {
+        closest = object.name;
+        closestDistance = distance;
+      }
+    });
+
+    if (closest === 'clue1') {
+      setActiveClue(1);
+      return;
+    }
+
+    if (closest === 'clue2') {
+      setActiveClue(2);
+      return;
+    }
+
+    if (closest === 'lock') {
+      setSmartLockOpen(true);
+      setWrongCode(false);
+      return;
+    }
+
+    if (closest === 'door') {
+      if (hasKeyRef.current) {
+        setEscaped(true);
+        return;
+      }
+
+      setNearObject('The smart lock is still locked.');
+    }
+  };
+
+  const pressKey = (key: string) => {
+    if (key === 'CLEAR') {
+      setCode('');
+      setWrongCode(false);
+      return;
+    }
+
+    if (key === 'ENTER') {
+      if (code === CODE) {
+        setHasKey(true);
+        setSmartLockOpen(false);
+        setCode('');
+        setWrongCode(false);
+        setNearObject('SMART LOCK OPEN — KEY FOUND');
+      } else {
+        setWrongCode(true);
+      }
+
+      return;
+    }
+
+    if (code.length >= 4) {
+      return;
+    }
+
+    setWrongCode(false);
+    setCode((previous) => previous + key);
+  };
+
+  const onJoystickStart = (event: any) => {
+    joystickRef.current.active = true;
+    joystickRef.current.x = 0;
+    joystickRef.current.y = 0;
+    joystickRef.current.startX = event.nativeEvent.pageX;
+    joystickRef.current.startY = event.nativeEvent.pageY;
+  };
+
+  const onJoystickMove = (event: any) => {
+    if (!joystickRef.current.active) {
+      return;
+    }
+
+    const dx =
+      event.nativeEvent.pageX - (joystickRef.current.startX ?? event.nativeEvent.pageX);
+
+    const dy =
+      event.nativeEvent.pageY - (joystickRef.current.startY ?? event.nativeEvent.pageY);
+
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const max = 55;
+
+    const scale = distance > max ? max / distance : 1;
+
+    joystickRef.current.x = (dx * scale) / max;
+    joystickRef.current.y = (dy * scale) / max;
+  };
+
+  const onJoystickEnd = () => {
+    joystickRef.current.active = false;
+    joystickRef.current.x = 0;
+    joystickRef.current.y = 0;
+  };
+
+  const onLookStart = (event: any) => {
+    lookRef.current.active = true;
+    lookRef.current.x = event.nativeEvent.pageX;
+    lookRef.current.y = event.nativeEvent.pageY;
+  };
+
+  const onLookMove = (event: any) => {
+    if (!lookRef.current.active) {
+      return;
+    }
+
+    const x = event.nativeEvent.pageX;
+    const y = event.nativeEvent.pageY;
+
+    const dx = x - lookRef.current.x;
+    const dy = y - lookRef.current.y;
+
+    lookRef.current.x = x;
+    lookRef.current.y = y;
+
+    yawRef.current -= dx * 0.006;
+    pitchRef.current -= dy * 0.004;
+
+    pitchRef.current = THREE.MathUtils.clamp(
+      pitchRef.current,
+      -0.75,
+      0.65,
+    );
+  };
+
+  const onLookEnd = () => {
+    lookRef.current.active = false;
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.game}>
+        <GLView
+          style={StyleSheet.absoluteFill}
+          onContextCreate={onContextCreate}
+          onTouchStart={onLookStart}
+          onTouchMove={onLookMove}
+          onTouchEnd={onLookEnd}
+        />
+
+        <View pointerEvents="box-none" style={styles.overlay}>
+          <View style={styles.topBar}>
+            <Pressable
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backText}>‹</Text>
+            </Pressable>
+
+            <View>
+              <Text style={styles.subject}>VEDIC MATHS</Text>
+              <Text style={styles.roomTitle}>THE NUMBER TEMPLE</Text>
+            </View>
+
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelText}>
+                LEVEL {params.level ?? '1'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.objectPrompt}>
+            {nearObject ? (
+              <Text style={styles.promptText}>{nearObject}</Text>
+            ) : (
+              <Text style={styles.promptText}>
+                Explore the room • find the numbers
+              </Text>
+            )}
+          </View>
+
+          <View pointerEvents="box-none" style={styles.bottomArea}>
+            <View
+              style={styles.joystick}
+              onTouchStart={onJoystickStart}
+              onTouchMove={onJoystickMove}
+              onTouchEnd={onJoystickEnd}
+            >
+              <View
+                style={[
+                  styles.joystickKnob,
+                  {
+                    transform: [
+                      {
+                        translateX: joystickRef.current.x * 32,
+                      },
+                      {
+                        translateY: joystickRef.current.y * 32,
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </View>
+
+            <Pressable style={styles.interactButton} onPress={interact}>
+              <Text style={styles.interactIcon}>◎</Text>
+              <Text style={styles.interactText}>INTERACT</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {activeClue !== null && (
+          <View style={styles.modalLayer}>
+            <View style={styles.clueCard}>
+              <Text style={styles.modalEyebrow}>
+                FOUND IN THE ROOM
+              </Text>
+
+              <Text style={styles.modalTitle}>
+                {CLUES[activeClue - 1].title}
+              </Text>
+
+              {CLUES[activeClue - 1].lines.map((line, index) => (
+                <Text
+                  key={`${activeClue}-${index}`}
+                  style={[
+                    styles.clueLine,
+                    line.includes('|') && styles.answerLine,
+                  ]}
+                >
+                  {line || ' '}
+                </Text>
+              ))}
+
+              <Pressable
+                style={styles.primaryButton}
+                onPress={() => setActiveClue(null)}
+              >
+                <Text style={styles.primaryButtonText}>CLOSE NOTE</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {smartLockOpen && (
+          <View style={styles.modalLayer}>
+            <View style={styles.lockCard}>
+              <Text style={styles.modalEyebrow}>SMART LOCK</Text>
+              <Text style={styles.modalTitle}>NUMBER TEMPLE</Text>
+
+              <View style={styles.display}>
+                <Text style={styles.displayText}>
+                  {code || '----'}
+                </Text>
+              </View>
+
+              <Text style={styles.lockHint}>
+                Solve 97 × 96 using the pattern you discovered.
+              </Text>
+
+              <View style={styles.keypad}>
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(
+                  (key) => (
+                    <Pressable
+                      key={key}
+                      style={styles.key}
+                      onPress={() => pressKey(key)}
+                    >
+                      <Text style={styles.keyText}>{key}</Text>
+                    </Pressable>
+                  ),
+                )}
+
+                <Pressable
+                  style={styles.key}
+                  onPress={() => pressKey('CLEAR')}
+                >
+                  <Text style={styles.keySmall}>CLEAR</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.key}
+                  onPress={() => pressKey('0')}
+                >
+                  <Text style={styles.keyText}>0</Text>
+                </Pressable>
+
+                <Pressable
+                  style={[styles.key, styles.enterKey]}
+                  onPress={() => pressKey('ENTER')}
+                >
+                  <Text style={styles.keySmall}>ENTER</Text>
+                </Pressable>
+              </View>
+
+              {wrongCode && (
+                <Text style={styles.errorText}>
+                  Not quite. Look at the clues again.
+                </Text>
+              )}
+
+              <Pressable
+                style={styles.closeButton}
+                onPress={() => setSmartLockOpen(false)}
+              >
+                <Text style={styles.closeText}>CANCEL</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {escaped && (
+          <View style={styles.successLayer}>
+            <View style={styles.successCard}>
+              <View style={styles.star}>
+                <Text style={styles.starText}>★</Text>
+              </View>
+
+              <Text style={styles.successEyebrow}>ROOM COMPLETE</Text>
+              <Text style={styles.successTitle}>YOU ESCAPED</Text>
+
+              <Text style={styles.successDescription}>
+                You discovered the Vedic Maths pattern, opened
+                the smart lock and found the exit.
+              </Text>
+
+              <Pressable
+                style={styles.primaryButton}
+                onPress={() => router.back()}
+              >
+                <Text style={styles.primaryButtonText}>
+                  RETURN TO ROOM
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {hasKey && !escaped && (
+          <View pointerEvents="none" style={styles.keyNotice}>
+            <Text style={styles.keyNoticeText}>🔑 KEY FOUND</Text>
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  game: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'space-between',
+  },
+
+  topBar: {
+    marginTop: 10,
+    marginHorizontal: 14,
+    padding: 12,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,253,249,0.92)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: COLORS.wall,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  backText: {
+    color: COLORS.charcoal,
+    fontSize: 30,
+    lineHeight: 32,
+  },
+
+  subject: {
+    color: COLORS.purpleDark,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+  },
+
+  roomTitle: {
+    color: COLORS.charcoal,
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+
+  levelBadge: {
+    marginLeft: 'auto',
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: COLORS.clue,
+  },
+
+  levelText: {
+    color: COLORS.purpleDark,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  objectPrompt: {
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,253,249,0.88)',
+  },
+
+  promptText: {
+    color: COLORS.charcoal,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  bottomArea: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+  },
+
+  joystick: {
+    width: 105,
+    height: 105,
+    borderRadius: 53,
+    backgroundColor: 'rgba(255,253,249,0.78)',
+    borderWidth: 2,
+    borderColor: 'rgba(139,111,199,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  joystickKnob: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: COLORS.purple,
+  },
+
+  interactButton: {
+    minWidth: 120,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: COLORS.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+
+  interactIcon: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    lineHeight: 18,
+  },
+
+  interactText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginTop: 3,
+  },
+
+  modalLayer: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(52,49,58,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 22,
+  },
+
+  clueCard: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: COLORS.paper,
+    borderRadius: 28,
+    padding: 24,
+  },
+
+  lockCard: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: COLORS.paper,
+    borderRadius: 28,
+    padding: 22,
+  },
+
+  modalEyebrow: {
+    color: COLORS.purpleDark,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+  },
+
+  modalTitle: {
+    color: COLORS.charcoal,
+    fontSize: 25,
+    fontWeight: '900',
+    marginTop: 5,
+    marginBottom: 18,
+  },
+
+  clueLine: {
+    color: COLORS.charcoal,
+    fontSize: 17,
+    fontWeight: '600',
+    lineHeight: 27,
+  },
+
+  answerLine: {
+    color: COLORS.purpleDark,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+
+  primaryButton: {
+    marginTop: 22,
+    minHeight: 52,
+    borderRadius: 17,
+    backgroundColor: COLORS.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  display: {
+    height: 62,
+    borderRadius: 18,
+    backgroundColor: COLORS.wall,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+
+  displayText: {
+    color: COLORS.charcoal,
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: 5,
+  },
+
+  lockHint: {
+    color: COLORS.charcoal,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 16,
+  },
+
+  keypad: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+  },
+
+  key: {
+    width: '31%',
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: COLORS.wall,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  enterKey: {
+    backgroundColor: COLORS.purple,
+  },
+
+  keyText: {
+    color: COLORS.charcoal,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+
+  keySmall: {
+    color: COLORS.charcoal,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+
+  errorText: {
+    color: '#9C5C61',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+
+  closeButton: {
+    alignSelf: 'center',
+    marginTop: 14,
+    padding: 10,
+  },
+
+  closeText: {
+    color: COLORS.purpleDark,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+
+  successLayer: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255,249,245,0.96)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+
+  successCard: {
+    width: '100%',
+    maxWidth: 390,
+    alignItems: 'center',
+    backgroundColor: COLORS.paper,
+    borderRadius: 30,
+    padding: 28,
+  },
+
+  star: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.clue,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  starText: {
+    color: COLORS.purple,
+    fontSize: 43,
+  },
+
+  successEyebrow: {
+    color: COLORS.purpleDark,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    marginTop: 20,
+  },
+
+  successTitle: {
+    color: COLORS.charcoal,
+    fontSize: 32,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+
+  successDescription: {
+    color: COLORS.charcoal,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+
+  keyNotice: {
+    position: 'absolute',
+    top: 105,
+    right: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: COLORS.green,
+  },
+
+  keyNoticeText: {
+    color: COLORS.charcoal,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+});

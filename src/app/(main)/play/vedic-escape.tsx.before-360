@@ -1,0 +1,617 @@
+import { GLView } from 'expo-gl';
+import { useRouter } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import {
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import * as THREE from 'three';
+
+const COLORS = {
+  background: '#FFF9F5',
+  wall: '#F1ECFA',
+  floor: '#F8E8DD',
+  wood: '#EBCFBD',
+  paper: '#FFFDF9',
+  clue: '#DCCFF4',
+  purple: '#8B6FC7',
+  purpleDark: '#7655B5',
+  charcoal: '#34313A',
+  peach: '#F3C7A9',
+  green: '#A9DCC7',
+  blue: '#BFD9F2',
+};
+
+function roundedBox(
+  width: number,
+  height: number,
+  depth: number,
+  color: string,
+  radius = 0.12,
+) {
+  const shape = new THREE.Shape();
+
+  const x = -width / 2;
+  const y = -height / 2;
+
+  shape.moveTo(x + radius, y);
+  shape.lineTo(x + width - radius, y);
+  shape.quadraticCurveTo(x + width, y, x + width, y + radius);
+  shape.lineTo(x + width, y + height - radius);
+  shape.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - radius,
+    y + height,
+  );
+  shape.lineTo(x + radius, y + height);
+  shape.quadraticCurveTo(x, y + height, x, y + height - radius);
+  shape.lineTo(x, y + radius);
+  shape.quadraticCurveTo(x, y, x + radius, y);
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    bevelSize: Math.min(radius * 0.45, 0.08),
+    bevelThickness: Math.min(radius * 0.45, 0.08),
+  });
+
+  geometry.translate(0, 0, -depth / 2);
+
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.8,
+  });
+
+  return new THREE.Mesh(geometry, material);
+}
+
+function makePaper(text: string) {
+  const group = new THREE.Group();
+
+  const paper = roundedBox(1.25, 0.9, 0.025, COLORS.paper, 0.06);
+  group.add(paper);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 360;
+
+  const ctx = canvas.getContext('2d');
+
+  if (ctx) {
+    ctx.fillStyle = COLORS.paper;
+    ctx.fillRect(0, 0, 512, 360);
+
+    ctx.fillStyle = COLORS.charcoal;
+    ctx.font = 'bold 42px sans-serif';
+    ctx.textAlign = 'center';
+
+    const lines = text.split('\n');
+
+    lines.forEach((line, index) => {
+      ctx.fillText(line, 256, 100 + index * 58);
+    });
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+  });
+
+  const front = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.15, 0.8),
+    material,
+  );
+
+  front.position.z = 0.03;
+  group.add(front);
+
+  return group;
+}
+
+function makeSmartLock() {
+  const group = new THREE.Group();
+
+  const body = roundedBox(0.85, 1.15, 0.18, COLORS.paper, 0.16);
+  group.add(body);
+
+  const screen = roundedBox(0.58, 0.28, 0.03, COLORS.blue, 0.08);
+  screen.position.z = 0.11;
+  screen.position.y = 0.25;
+  group.add(screen);
+
+  const circle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.19, 0.19, 0.035, 32),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.purple,
+      roughness: 0.5,
+    }),
+  );
+
+  circle.rotation.x = Math.PI / 2;
+  circle.position.z = 0.13;
+  circle.position.y = -0.12;
+  group.add(circle);
+
+  const center = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.08, 0.04, 32),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.charcoal,
+    }),
+  );
+
+  center.rotation.x = Math.PI / 2;
+  center.position.z = 0.16;
+  center.position.y = -0.12;
+  group.add(center);
+
+  const led = new THREE.Mesh(
+    new THREE.SphereGeometry(0.035, 16, 16),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.green,
+      emissive: COLORS.green,
+      emissiveIntensity: 0.35,
+    }),
+  );
+
+  led.position.set(0.27, 0.42, 0.13);
+  group.add(led);
+
+  return group;
+}
+
+function makeDoor() {
+  const group = new THREE.Group();
+
+  const left = roundedBox(0.32, 3.1, 0.45, COLORS.purple, 0.12);
+  left.position.x = -1.25;
+  group.add(left);
+
+  const right = roundedBox(0.32, 3.1, 0.45, COLORS.purple, 0.12);
+  right.position.x = 1.25;
+  group.add(right);
+
+  const top = new THREE.Mesh(
+    new THREE.TorusGeometry(1.25, 0.16, 16, 40, Math.PI),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.purple,
+      roughness: 0.7,
+    }),
+  );
+
+  top.rotation.z = Math.PI;
+  top.position.y = 1.55;
+  group.add(top);
+
+  const door = roundedBox(2.25, 2.55, 0.22, COLORS.peach, 0.18);
+  door.position.y = -0.1;
+  group.add(door);
+
+  const inset = roundedBox(1.85, 2.15, 0.025, COLORS.wall, 0.14);
+  inset.position.y = -0.1;
+  inset.position.z = 0.14;
+  group.add(inset);
+
+  const handle = new THREE.Mesh(
+    new THREE.SphereGeometry(0.11, 20, 20),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.purpleDark,
+    }),
+  );
+
+  handle.position.set(0.65, -0.05, 0.25);
+  group.add(handle);
+
+  return group;
+}
+
+export default function VedicEscape() {
+  const router = useRouter();
+
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+
+  const [ready, setReady] = useState(false);
+  const [message, setMessage] = useState('Touch the movement buttons.');
+
+  const player = useRef({
+    x: 0,
+    z: 3.5,
+  });
+
+  const buildRoom = (
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+  ) => {
+    scene.background = new THREE.Color(COLORS.background);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 2.2));
+
+    const light = new THREE.DirectionalLight(0xffffff, 2.5);
+    light.position.set(3, 7, 5);
+    scene.add(light);
+
+    const floor = roundedBox(12, 0.25, 11, COLORS.floor, 0.18);
+    floor.position.y = -0.2;
+    scene.add(floor);
+
+    const backWall = roundedBox(12, 5.5, 0.25, COLORS.wall, 0.2);
+    backWall.position.set(0, 2.55, -5.4);
+    scene.add(backWall);
+
+    const leftWall = roundedBox(0.25, 5.5, 10.8, COLORS.wall, 0.2);
+    leftWall.position.set(-5.9, 2.55, 0);
+    scene.add(leftWall);
+
+    const rightWall = roundedBox(0.25, 5.5, 10.8, COLORS.wall, 0.2);
+    rightWall.position.set(5.9, 2.55, 0);
+    scene.add(rightWall);
+
+    const table = roundedBox(3.2, 0.35, 1.8, COLORS.wood, 0.15);
+    table.position.set(-2.4, 1.1, -1.1);
+    scene.add(table);
+
+    const paper1 = makePaper('98 × 97\n95 | 06');
+    paper1.position.set(-2.4, 1.32, -1.1);
+    paper1.rotation.x = -Math.PI / 2;
+    scene.add(paper1);
+
+    const paper2 = makePaper('97 × 96\n93 | 12');
+    paper2.position.set(-2.4, 1.34, -0.55);
+    paper2.rotation.x = -Math.PI / 2;
+    scene.add(paper2);
+
+    const lock = makeSmartLock();
+    lock.position.set(3.9, 1.6, -4.9);
+    scene.add(lock);
+
+    const door = makeDoor();
+    door.position.set(0, 1.55, -5.15);
+    scene.add(door);
+
+    const locker = roundedBox(1.7, 2.5, 0.8, COLORS.wood, 0.16);
+    locker.position.set(3.8, 1.25, -3.8);
+    scene.add(locker);
+
+    const number1 = roundedBox(0.5, 0.5, 0.18, COLORS.clue, 0.1);
+    number1.position.set(2.7, 1.5, -2.5);
+    scene.add(number1);
+
+    const number2 = roundedBox(0.5, 0.5, 0.18, COLORS.clue, 0.1);
+    number2.position.set(3.3, 1.5, -2.5);
+    scene.add(number2);
+
+    camera.position.set(player.current.x, 1.65, player.current.z);
+    camera.lookAt(0, 1.5, -5);
+
+    sceneRef.current = scene;
+    cameraRef.current = camera;
+
+    setReady(true);
+  };
+
+  const move = (dx: number, dz: number) => {
+    player.current.x += dx;
+    player.current.z += dz;
+
+    player.current.x = Math.max(-5, Math.min(5, player.current.x));
+    player.current.z = Math.max(-4.8, Math.min(4.8, player.current.z));
+
+    if (cameraRef.current) {
+      cameraRef.current.position.x = player.current.x;
+      cameraRef.current.position.z = player.current.z;
+    }
+
+    setMessage(
+      `PLAYER: X ${player.current.x.toFixed(1)}   Z ${player.current.z.toFixed(1)}`,
+    );
+  };
+
+  const interact = () => {
+    const x = player.current.x;
+    const z = player.current.z;
+
+    const nearLock =
+      Math.abs(x - 3.9) < 1.5 &&
+      Math.abs(z + 4.9) < 1.5;
+
+    const nearDoor =
+      Math.abs(x) < 1.7 &&
+      Math.abs(z + 5) < 1.4;
+
+    if (nearLock) {
+      setMessage('SMART LOCK — solve the Vedic Maths clue: 97 × 96 = 9312');
+      return;
+    }
+
+    if (nearDoor) {
+      setMessage('EXIT DOOR — find the key first.');
+      return;
+    }
+
+    setMessage('Nothing nearby. Explore the room.');
+  };
+
+  const onContextCreate = async (gl: any) => {
+    const scene = new THREE.Scene();
+
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+
+    const camera = new THREE.PerspectiveCamera(
+      65,
+      width / height,
+      0.1,
+      100,
+    );
+
+    const renderer = new THREE.WebGLRenderer({
+      context: gl,
+      antialias: true,
+    });
+
+    renderer.setSize(width, height, false);
+    renderer.setPixelRatio(1);
+
+    buildRoom(scene, camera);
+
+    const animate = () => {
+      requestAnimationFrame(animate);
+
+      renderer.render(scene, camera);
+      gl.endFrameEXP();
+    };
+
+    animate();
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backText}>‹</Text>
+          </Pressable>
+
+          <View>
+            <Text style={styles.title}>VEDIC MATHS</Text>
+            <Text style={styles.subtitle}>THE NUMBER TEMPLE</Text>
+          </View>
+
+          <View style={styles.status}>
+            <Text style={styles.statusText}>
+              {ready ? '●' : '○'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.game}>
+          <GLView
+            style={StyleSheet.absoluteFill}
+            onContextCreate={onContextCreate}
+          />
+
+          <View pointerEvents="box-none" style={styles.overlay}>
+            <View style={styles.message}>
+              <Text style={styles.messageText}>{message}</Text>
+            </View>
+
+            <View style={styles.controls}>
+              <View style={styles.dpad}>
+                <Pressable
+                  style={styles.control}
+                  onPress={() => move(0, -0.45)}
+                >
+                  <Text style={styles.controlText}>▲</Text>
+                </Pressable>
+
+                <View style={styles.middleRow}>
+                  <Pressable
+                    style={styles.control}
+                    onPress={() => move(-0.45, 0)}
+                  >
+                    <Text style={styles.controlText}>◀</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.stop}
+                    onPress={() => setMessage('PLAYER STOPPED')}
+                  >
+                    <Text style={styles.stopText}>●</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.control}
+                    onPress={() => move(0.45, 0)}
+                  >
+                    <Text style={styles.controlText}>▶</Text>
+                  </Pressable>
+                </View>
+
+                <Pressable
+                  style={styles.control}
+                  onPress={() => move(0, 0.45)}
+                >
+                  <Text style={styles.controlText}>▼</Text>
+                </Pressable>
+              </View>
+
+              <Pressable
+                style={styles.interact}
+                onPress={interact}
+              >
+                <Text style={styles.interactText}>INTERACT</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  header: {
+    height: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    gap: 14,
+  },
+
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  backText: {
+    fontSize: 32,
+    lineHeight: 34,
+    color: COLORS.charcoal,
+  },
+
+  title: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: COLORS.charcoal,
+  },
+
+  subtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    color: COLORS.purpleDark,
+  },
+
+  status: {
+    marginLeft: 'auto',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  statusText: {
+    color: COLORS.green,
+    fontSize: 18,
+  },
+
+  game: {
+    flex: 1,
+    overflow: 'hidden',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: COLORS.background,
+  },
+
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'space-between',
+    padding: 18,
+  },
+
+  message: {
+    alignSelf: 'center',
+    maxWidth: '82%',
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,253,249,0.94)',
+  },
+
+  messageText: {
+    color: COLORS.charcoal,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+
+  dpad: {
+    alignItems: 'center',
+  },
+
+  middleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  control: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,253,249,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 4,
+  },
+
+  controlText: {
+    fontSize: 23,
+    color: COLORS.purpleDark,
+    fontWeight: '800',
+  },
+
+  stop: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(220,207,244,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  stopText: {
+    fontSize: 16,
+    color: COLORS.purpleDark,
+  },
+
+  interact: {
+    width: 126,
+    height: 58,
+    borderRadius: 22,
+    backgroundColor: COLORS.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  interactText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+});

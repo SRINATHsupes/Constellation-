@@ -1,0 +1,1780 @@
+import { GLView } from 'expo-gl';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import * as THREE from 'three';
+
+const COLORS = {
+  background: '#FFF9F5',
+  wall: '#F1ECFA',
+  floor: '#F8E8DD',
+  wood: '#EBCFBD',
+  paper: '#FFFDF9',
+  clue: '#DCCFF4',
+  purple: '#8B6FC7',
+  purpleDark: '#7655B5',
+  charcoal: '#34313A',
+  peach: '#F3C7A9',
+  person: '#A99ADB',
+  personSkin: '#F2C6A8',
+  green: '#A9DCC7',
+};
+
+const CODE = '9506';
+
+type Clue = {
+  id: number;
+  title: string;
+  lines: string[];
+};
+
+const CLUES: Clue[] = [
+  {
+    id: 1,
+    title: 'NOTE 1',
+    lines: [
+      '98 × 97',
+      '',
+      '98 → 100 − 2',
+      '97 → 100 − 3',
+      '',
+      '95 | 06',
+    ],
+  },
+  {
+    id: 2,
+    title: 'NOTE 2',
+    lines: [
+      '97 × 96',
+      '',
+      '100 − 3 − 4 = 93',
+      '3 × 4 = 12',
+      '',
+      '93 | 12',
+    ],
+  },
+];
+
+export default function VedicEscape() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ level?: string }>();
+
+  const [activeClue, setActiveClue] = useState<number | null>(null);
+  const [keypadOpen, setKeypadOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const [escaped, setEscaped] = useState(false);
+  const [hasKey, setHasKey] = useState(false);
+  const [wrongCode, setWrongCode] = useState(false);
+
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const animationRef = useRef<number | null>(null);
+
+  const yawRef = useRef(0);
+  const pitchRef = useRef(0);
+
+  // LEFT side of screen = walking
+  const movementRef = useRef({
+    active: false,
+    x: 0,
+    y: 0,
+  });
+
+  // RIGHT side of screen = looking around
+  const lookTouchRef = useRef({
+    active: false,
+    x: 0,
+    y: 0,
+  });
+
+  const hasKeyRef = useRef(false);
+  const escapedRef = useRef(false);
+
+  const doorRef = useRef<THREE.Group | null>(null);
+  const personRef = useRef<THREE.Group | null>(null);
+  const lockerRef = useRef<THREE.Group | null>(null);
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const pointerRef = useRef(new THREE.Vector2());
+
+  useEffect(() => {
+    hasKeyRef.current = hasKey;
+  }, [hasKey]);
+
+  useEffect(() => {
+    escapedRef.current = escaped;
+  }, [escaped]);
+
+  useEffect(() => {
+    return () => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+      }
+
+      rendererRef.current?.dispose();
+    };
+  }, []);
+
+  const makeBox = (
+    width: number,
+    height: number,
+    depth: number,
+    color: string,
+    x: number,
+    y: number,
+    z: number,
+  ) => {
+    const geometry = new THREE.BoxGeometry(
+      width,
+      height,
+      depth,
+    );
+
+    const material = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.8,
+    });
+
+    const mesh = new THREE.Mesh(
+      geometry,
+      material,
+    );
+
+    mesh.position.set(x, y, z);
+
+    return mesh;
+  };
+
+  const makePaper = (
+    x: number,
+    y: number,
+    z: number,
+    rotationY: number,
+  ) => {
+    const paper = makeBox(
+      1.5,
+      0.04,
+      1.1,
+      COLORS.paper,
+      x,
+      y,
+      z,
+    );
+
+    paper.rotation.y = rotationY;
+
+    return paper;
+  };
+
+  const makePerson = () => {
+    const group = new THREE.Group();
+
+    const body = makeBox(
+      0.65,
+      1.1,
+      0.45,
+      COLORS.person,
+      0,
+      1.05,
+      0,
+    );
+
+    const headGeometry =
+      new THREE.SphereGeometry(0.32, 16, 16);
+
+    const headMaterial =
+      new THREE.MeshStandardMaterial({
+        color: COLORS.personSkin,
+        roughness: 0.8,
+      });
+
+    const head = new THREE.Mesh(
+      headGeometry,
+      headMaterial,
+    );
+
+    head.position.set(0, 1.85, 0);
+
+    group.add(body);
+    group.add(head);
+
+    group.position.set(0, 0, -1.7);
+
+    return group;
+  };
+
+
+  const makeLocker = () => {
+    const group = new THREE.Group();
+
+    const body = makeBox(
+      1.45,
+      2.8,
+      0.75,
+      COLORS.clue,
+      0,
+      1.4,
+      0,
+    );
+
+    const inner = makeBox(
+      1.05,
+      2.35,
+      0.08,
+      COLORS.paper,
+      0,
+      1.4,
+      -0.4,
+    );
+
+    const handle = makeBox(
+      0.12,
+      0.5,
+      0.16,
+      COLORS.purpleDark,
+      0.38,
+      1.4,
+      -0.52,
+    );
+
+    const lock = makeBox(
+      0.28,
+      0.28,
+      0.16,
+      COLORS.purpleDark,
+      0,
+      1.45,
+      -0.54,
+    );
+
+    group.add(body);
+    group.add(inner);
+    group.add(handle);
+    group.add(lock);
+
+    group.position.set(4.15, 0, -3.8);
+
+    return group;
+  };
+
+  const makeDoor = () => {
+    const group = new THREE.Group();
+
+    const frameLeft = makeBox(
+      0.3,
+      3.5,
+      0.4,
+      COLORS.clue,
+      -1.5,
+      1.75,
+      0,
+    );
+
+    const frameRight = makeBox(
+      0.3,
+      3.5,
+      0.4,
+      COLORS.clue,
+      1.5,
+      1.75,
+      0,
+    );
+
+    const frameTop = makeBox(
+      3.3,
+      0.3,
+      0.4,
+      COLORS.peach,
+      0,
+      3.35,
+      0,
+    );
+
+    const door = makeBox(
+      2.8,
+      3.1,
+      0.22,
+      COLORS.clue,
+      0,
+      1.55,
+      0,
+    );
+
+    door.name = 'door';
+
+    group.add(frameLeft);
+    group.add(frameRight);
+    group.add(frameTop);
+    group.add(door);
+
+    group.position.set(0, 0, -5);
+
+    return group;
+  };
+
+  const onContextCreate = async (gl: any) => {
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+
+    const scene = new THREE.Scene();
+
+    scene.background = new THREE.Color(
+      COLORS.background,
+    );
+
+    sceneRef.current = scene;
+
+    const camera = new THREE.PerspectiveCamera(
+      55,
+      width / height,
+      0.1,
+      100,
+    );
+
+    camera.position.set(0, 2.8, 0);
+    cameraRef.current = camera;
+
+    yawRef.current = 0;
+    pitchRef.current = 0;
+
+    camera.lookAt(0, 2.2, -1);
+
+    const renderer = new THREE.WebGLRenderer({
+      context: gl,
+      antialias: true,
+    });
+
+    renderer.setSize(
+      width,
+      height,
+      false,
+    );
+
+    rendererRef.current = renderer;
+
+    {/* LIGHTING */}
+
+    const ambientLight =
+      new THREE.AmbientLight(
+        '#FFF4EC',
+        2.2,
+      );
+
+    scene.add(ambientLight);
+
+    const mainLight =
+      new THREE.DirectionalLight(
+        '#FFFFFF',
+        2.5,
+      );
+
+    mainLight.position.set(
+      3,
+      7,
+      5,
+    );
+
+    scene.add(mainLight);
+
+    {/* FLOOR */}
+
+    const floor = makeBox(
+      12,
+      0.3,
+      12,
+      COLORS.floor,
+      0,
+      -0.15,
+      -1,
+    );
+
+    scene.add(floor);
+
+    {/* BACK WALL */}
+
+    const backWall = makeBox(
+      12,
+      7,
+      0.3,
+      COLORS.wall,
+      0,
+      3.5,
+      -6,
+    );
+
+    scene.add(backWall);
+
+    {/* LEFT WALL */}
+
+    const leftWall = makeBox(
+      0.3,
+      7,
+      12,
+      COLORS.wall,
+      -6,
+      3.5,
+      -1,
+    );
+
+    scene.add(leftWall);
+
+    {/* RIGHT WALL */}
+
+    const rightWall = makeBox(
+      0.3,
+      7,
+      12,
+      COLORS.wall,
+      6,
+      3.5,
+      -1,
+    );
+
+    scene.add(rightWall);
+
+    {/* CEILING */}
+
+    const ceiling = makeBox(
+      12,
+      0.3,
+      12,
+      '#F7F0FA',
+      0,
+      7,
+      -1,
+    );
+
+    scene.add(ceiling);
+
+    {/* TABLE */}
+
+    const tableTop = makeBox(
+      3.2,
+      0.25,
+      1.5,
+      COLORS.wood,
+      -2.7,
+      1.45,
+      -2.2,
+    );
+
+    scene.add(tableTop);
+
+    {/* LOCKER */}
+
+    const locker = makeLocker();
+
+    lockerRef.current = locker;
+
+    scene.add(locker);
+
+    const tableLegPositions = [
+      [-4, 0.7, -2.7],
+      [-1.4, 0.7, -2.7],
+      [-4, 0.7, -1.7],
+      [-1.4, 0.7, -1.7],
+    ];
+
+    tableLegPositions.forEach(
+      ([x, y, z]) => {
+        scene.add(
+          makeBox(
+            0.2,
+            1.4,
+            0.2,
+            COLORS.wood,
+            x,
+            y,
+            z,
+          ),
+        );
+      },
+    );
+
+    {/* MATH PAPERS */}
+
+    const paper1 = makePaper(
+      -3.4,
+      1.62,
+      -2.2,
+      -0.1,
+    );
+
+    const paper2 = makePaper(
+      -1.9,
+      1.62,
+      -2.2,
+      0.08,
+    );
+
+    scene.add(paper1);
+    scene.add(paper2);
+
+    {/* DECORATIVE NUMBER BLOCKS */}
+
+    scene.add(
+      makeBox(
+        0.7,
+        0.7,
+        0.25,
+        COLORS.clue,
+        3.8,
+        2.4,
+        -5.7,
+      ),
+    );
+
+    scene.add(
+      makeBox(
+        0.7,
+        0.7,
+        0.25,
+        COLORS.peach,
+        4.7,
+        2.4,
+        -5.7,
+      ),
+    );
+
+    {/* DOOR */}
+
+    const door = makeDoor();
+
+    doorRef.current = door;
+
+    scene.add(door);
+
+    {/* PERSON */}
+
+    const person = makePerson();
+
+    personRef.current = person;
+
+    scene.add(person);
+
+    {/* SMALL MATH SYMBOLS */}
+
+    const symbolPositions = [
+      [-4.7, 3.8, -5.7],
+      [-3.8, 3.8, -5.7],
+      [3.7, 4.0, -5.7],
+      [4.6, 4.0, -5.7],
+    ];
+
+    symbolPositions.forEach(
+      ([x, y, z], index) => {
+        scene.add(
+          makeBox(
+            0.45,
+            0.45,
+            0.15,
+            index % 2 === 0
+              ? COLORS.peach
+              : COLORS.clue,
+            x,
+            y,
+            z,
+          ),
+        );
+      },
+    );
+
+    {/* ANIMATION */}
+
+    const animate = () => {
+      animationRef.current =
+        requestAnimationFrame(animate);
+
+      const time =
+        Date.now() * 0.001;
+
+      {/* Floating math blocks. */}
+
+      scene.children.forEach(
+        (child) => {
+          if (
+            child instanceof THREE.Mesh &&
+            child.position.z < -5
+          ) {
+            child.rotation.z =
+              Math.sin(time + child.position.x) *
+              0.05;
+          }
+        },
+      );
+
+      {/* Person slowly walks toward the opened door. */}
+
+      if (
+        escapedRef.current &&
+        personRef.current
+      ) {
+        personRef.current.position.z -=
+          0.018;
+
+        personRef.current.position.y =
+          Math.abs(
+            Math.sin(time * 5),
+          ) * 0.04;
+      }
+
+      {/* Door opens upward when escaped. */}
+
+      if (
+        escapedRef.current &&
+        doorRef.current
+      ) {
+        const doorMesh =
+          doorRef.current.children.find(
+            (child) =>
+              child.name === 'door',
+          );
+
+        if (doorMesh) {
+          doorMesh.position.y =
+            Math.min(
+              4.0,
+              doorMesh.position.y +
+                0.025,
+            );
+        }
+      }
+
+      const lookDistance = 5;
+
+      const lookX =
+        Math.sin(yawRef.current) *
+        Math.cos(pitchRef.current) *
+        lookDistance;
+
+      const lookY =
+        2.2 +
+        Math.sin(pitchRef.current) *
+        lookDistance;
+
+      const lookZ =
+        -Math.cos(yawRef.current) *
+        Math.cos(pitchRef.current) *
+        lookDistance;
+
+      camera.lookAt(
+        camera.position.x + lookX,
+        lookY,
+        camera.position.z + lookZ,
+      );
+
+      renderer.render(
+        scene,
+        camera,
+      );
+
+      gl.endFrameEXP();
+    };
+
+    animate();
+  };
+
+  const interactWithRoom = (pageX: number, pageY: number) => {
+    const camera = cameraRef.current;
+    const scene = sceneRef.current;
+
+    if (!camera || !scene) {
+      return;
+    }
+
+    const view = {
+      width: 1,
+      height: 1,
+    };
+
+    pointerRef.current.set(
+      (pageX / view.width) * 2 - 1,
+      -(pageY / view.height) * 2 + 1,
+    );
+
+    /*
+     * For now the interaction uses the camera's
+     * forward direction rather than requiring
+     * precise screen coordinates.
+     */
+
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+
+    raycasterRef.current.set(
+      camera.position,
+      direction,
+    );
+
+    const targets: THREE.Object3D[] = [];
+
+    if (lockerRef.current) {
+      targets.push(lockerRef.current);
+    }
+
+    if (doorRef.current) {
+      targets.push(doorRef.current);
+    }
+
+    const hits =
+      raycasterRef.current.intersectObjects(
+        targets,
+        true,
+      );
+
+    if (hits.length === 0) {
+      return;
+    }
+
+    let object: THREE.Object3D | null =
+      hits[0].object;
+
+    while (
+      object &&
+      object.parent &&
+      object.parent !== scene
+    ) {
+      object = object.parent;
+    }
+
+    if (
+      object === lockerRef.current &&
+      !escapedRef.current
+    ) {
+      setKeypadOpen(true);
+      return;
+    }
+
+    if (
+      object === doorRef.current &&
+      hasKeyRef.current &&
+      !escapedRef.current
+    ) {
+      setEscaped(true);
+    }
+  };
+
+  const movePlayer = (
+    horizontal: number,
+    vertical: number,
+  ) => {
+    const camera = cameraRef.current;
+
+    if (!camera) {
+      return;
+    }
+
+    const speed = 0.045;
+
+    // Direction the player is currently facing.
+    const forwardX = Math.sin(yawRef.current);
+    const forwardZ = -Math.cos(yawRef.current);
+
+    const rightX = Math.cos(yawRef.current);
+    const rightZ = Math.sin(yawRef.current);
+
+    const nextX =
+      camera.position.x +
+      (forwardX * vertical +
+        rightX * horizontal) *
+        speed;
+
+    const nextZ =
+      camera.position.z +
+      (forwardZ * vertical +
+        rightZ * horizontal) *
+        speed;
+
+    /*
+     * ROOM COLLISION
+     *
+     * The player cannot walk through the walls.
+     */
+    camera.position.x = Math.max(
+      -5.15,
+      Math.min(5.15, nextX),
+    );
+
+    camera.position.z = Math.max(
+      -5.15,
+      Math.min(4.2, nextZ),
+    );
+
+    camera.position.y = 2.8;
+  };
+
+  const handleTouchStart = (event: any) => {
+    const touch =
+      event.nativeEvent.touches?.[0];
+
+    if (!touch) {
+      return;
+    }
+
+    /*
+     * LEFT 190px = movement.
+     *
+     * Drag up    = walk forward
+     * Drag down  = walk backward
+     * Drag left  = strafe left
+     * Drag right = strafe right
+     */
+    if (touch.pageX < 190) {
+      movementRef.current = {
+        active: true,
+        x: touch.pageX,
+        y: touch.pageY,
+      };
+
+      return;
+    }
+
+    /*
+     * RIGHT side = camera look.
+     */
+    lookTouchRef.current = {
+      active: true,
+      x: touch.pageX,
+      y: touch.pageY,
+    };
+  };
+
+  const handleTouchMove = (event: any) => {
+    const touch =
+      event.nativeEvent.touches?.[0];
+
+    if (!touch) {
+      return;
+    }
+
+    if (movementRef.current.active) {
+      const dx =
+        (touch.pageX -
+          movementRef.current.x) /
+        12;
+
+      const dy =
+        (touch.pageY -
+          movementRef.current.y) /
+        12;
+
+      movementRef.current.x =
+        touch.pageX;
+
+      movementRef.current.y =
+        touch.pageY;
+
+      movePlayer(dx, -dy);
+
+      return;
+    }
+
+    if (lookTouchRef.current.active) {
+      const dx =
+        touch.pageX -
+        lookTouchRef.current.x;
+
+      const dy =
+        touch.pageY -
+        lookTouchRef.current.y;
+
+      lookTouchRef.current.x =
+        touch.pageX;
+
+      lookTouchRef.current.y =
+        touch.pageY;
+
+      yawRef.current -= dx * 0.006;
+
+      pitchRef.current -=
+        dy * 0.004;
+
+      const maxPitch = 0.65;
+
+      pitchRef.current =
+        Math.max(
+          -maxPitch,
+          Math.min(
+            maxPitch,
+            pitchRef.current,
+          ),
+        );
+    }
+  };
+
+  const handleTouchEnd = (event: any) => {
+    if (movementRef.current.active) {
+      movementRef.current.active =
+        false;
+
+      return;
+    }
+
+    if (!lookTouchRef.current.active) {
+      return;
+    }
+
+    const touch =
+      event.nativeEvent.changedTouches?.[0];
+
+    if (touch) {
+      const dx =
+        Math.abs(
+          touch.pageX -
+            lookTouchRef.current.x,
+        );
+
+      const dy =
+        Math.abs(
+          touch.pageY -
+            lookTouchRef.current.y,
+        );
+
+      /*
+       * Tiny movement = interaction.
+       *
+       * So the player can:
+       *
+       * walk toward locker
+       *        ↓
+       * look at locker
+       *        ↓
+       * tap locker
+       */
+      if (dx < 12 && dy < 12) {
+        interactWithRoom(
+          touch.pageX,
+          touch.pageY,
+        );
+      }
+    }
+
+    lookTouchRef.current.active =
+      false;
+  };
+
+  const pressKey = (key: string) => {
+    if (key === 'CLEAR') {
+      setCode('');
+      setWrongCode(false);
+      return;
+    }
+
+    if (key === 'ENTER') {
+      if (code === CODE) {
+        setHasKey(true);
+        setKeypadOpen(false);
+        setWrongCode(false);
+        setCode('');
+      } else {
+        setWrongCode(true);
+      }
+
+      return;
+    }
+
+    if (code.length >= 4) {
+      return;
+    }
+
+    setWrongCode(false);
+    setCode((previous) => previous + key);
+  };
+
+  const closeClue = () => {
+    setActiveClue(null);
+  };
+
+  return (
+    <SafeAreaView
+      style={styles.container}
+    >
+      <View style={styles.game}>
+        <View
+          style={styles.glView}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <GLView
+            style={StyleSheet.absoluteFill}
+            onContextCreate={onContextCreate}
+          />
+        </View>
+
+        {/* TOP BAR */}
+
+        <View
+          pointerEvents="box-none"
+          style={styles.topBar}
+        >
+          <Pressable
+            onPress={() =>
+              router.back()
+            }
+            style={styles.backButton}
+          >
+            <Text style={styles.backText}>
+              ‹
+            </Text>
+          </Pressable>
+
+          <View>
+            <Text style={styles.kicker}>
+              VEDIC MATHS
+            </Text>
+
+            <Text style={styles.title}>
+              THE NUMBER TEMPLE
+            </Text>
+          </View>
+
+          <View style={styles.levelBadge}>
+            <Text
+              style={styles.levelText}
+            >
+              LEVEL {params.level ?? '1'}
+            </Text>
+          </View>
+        </View>
+
+        {/* 3D ROOM INTERACTION */}
+
+        {/* EXIT DOOR */}
+
+
+
+        {!escaped && (
+          <>
+            <View
+              pointerEvents="none"
+              style={styles.movePad}
+            >
+              <Text style={styles.moveArrow}>
+                ↑
+              </Text>
+
+              <Text style={styles.moveText}>
+                WALK
+              </Text>
+            </View>
+
+            <View
+              pointerEvents="none"
+              style={styles.lookHint}
+            >
+              <Text style={styles.lookHintText}>
+                SWIPE TO LOOK
+              </Text>
+            </View>
+          </>
+        )}
+
+        {/* INSTRUCTION */}
+
+        {!escaped &&
+          activeClue === null &&
+          !keypadOpen && (
+            <View
+              style={styles.instruction}
+            >
+              <Text
+                style={styles.instructionTitle}
+              >
+                {hasKey ? 'KEY FOUND' : 'YOU ARE TRAPPED'}
+              </Text>
+
+              <Text
+                style={styles.instructionText}
+              >
+                {hasKey
+                  ? 'Take the key to the exit door.'
+                  : 'Find the example, understand the pattern, then open the locker on the right.'}
+              </Text>
+            </View>
+          )}
+
+        {/* CLUE CARD */}
+
+        {activeClue !== null && (
+          <View style={styles.modalLayer}>
+            <View
+              style={styles.clueCard}
+            >
+              <Text
+                style={styles.clueTitle}
+              >
+                {CLUES[activeClue].title}
+              </Text>
+
+              {CLUES[
+                activeClue
+              ].lines.map(
+                (line, index) => (
+                  <Text
+                    key={`${line}-${index}`}
+                    style={[
+                      styles.clueLine,
+                      line === ''
+                        ? styles.emptyLine
+                        : null,
+                    ]}
+                  >
+                    {line || ' '}
+                  </Text>
+                ),
+              )}
+
+              <Text
+                style={styles.clueHint}
+              >
+                This is your first example.
+                Look at how both numbers
+                are close to 100.
+              </Text>
+
+              <Pressable
+                onPress={closeClue}
+                style={styles.primaryButton}
+              >
+                <Text
+                  style={
+                    styles.primaryButtonText
+                  }
+                >
+                  CLOSE CLUE
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* KEYPAD */}
+
+        {keypadOpen && !escaped && (
+          <View style={styles.modalLayer}>
+            <View
+              style={styles.keypadCard}
+            >
+              <Text
+                style={styles.keypadTitle}
+              >
+                LOCKER LOCK
+              </Text>
+
+              <Text
+                style={styles.keypadSubtitle}
+              >
+                Use the pattern from the example
+              </Text>
+
+              <View
+                style={styles.codeDisplay}
+              >
+                <Text
+                  style={styles.codeText}
+                >
+                  {code
+                    .padEnd(4, '•')
+                    .split('')
+                    .join(' ')}
+                </Text>
+              </View>
+
+              {wrongCode && (
+                <Text
+                  style={styles.wrongText}
+                >
+                  The lock stays closed.
+                  Check the clues.
+                </Text>
+              )}
+
+              <View
+                style={styles.keyGrid}
+              >
+                {[
+                  '1',
+                  '2',
+                  '3',
+                  '4',
+                  '5',
+                  '6',
+                  '7',
+                  '8',
+                  '9',
+                  'CLEAR',
+                  '0',
+                  'ENTER',
+                ].map((key) => (
+                  <Pressable
+                    key={key}
+                    onPress={() =>
+                      pressKey(key)
+                    }
+                    style={[
+                      styles.key,
+                      key === 'ENTER'
+                        ? styles.enterKey
+                        : null,
+                      key === 'CLEAR'
+                        ? styles.clearKey
+                        : null,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        styles.keyText
+                      }
+                    >
+                      {key}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Pressable
+                onPress={() =>
+                  setKeypadOpen(false)
+                }
+                style={styles.closeKeypad}
+              >
+                <Text
+                  style={styles.closeKeypadText}
+                >
+                  BACK TO ROOM
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* ESCAPE */}
+
+        {escaped && (
+          <View
+            style={styles.escapeLayer}
+          >
+            <View
+              style={styles.escapeCard}
+            >
+              <View
+                style={styles.star}
+              >
+                <Text
+                  style={styles.starText}
+                >
+                  ★
+                </Text>
+              </View>
+
+              <Text
+                style={styles.escapeTitle}
+              >
+                YOU FOUND THE KEY
+              </Text>
+
+              <Text
+                style={styles.escapeSubtitle}
+              >
+                The locker opened.
+                Now take the key to the
+                exit door.
+              </Text>
+
+              <Text
+                style={styles.learning}
+              >
+                🔑  KEY FOUND
+              </Text>
+
+              <Pressable
+                onPress={() => {
+                  if (hasKey) {
+                    setEscaped(true);
+                  }
+                }}
+                style={styles.primaryButton}
+              >
+                <Text
+                  style={
+                    styles.primaryButtonText
+                  }
+                >
+                  OPEN THE EXIT DOOR
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  game: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+
+  glView: {
+    ...StyleSheet.absoluteFill,
+  },
+
+  topBar: {
+    position: 'absolute',
+    top: 12,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  backButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255,253,249,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+  },
+
+  backText: {
+    color: COLORS.charcoal,
+    fontSize: 34,
+    lineHeight: 38,
+    marginTop: -3,
+  },
+
+  kicker: {
+    color: COLORS.purpleDark,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.6,
+    textAlign: 'center',
+  },
+
+  title: {
+    color: COLORS.charcoal,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+
+  levelBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(220,207,244,0.94)',
+  },
+
+  levelText: {
+    color: COLORS.purpleDark,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  movePad: {
+    position: 'absolute',
+    left: 20,
+    bottom: 118,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor:
+      'rgba(255,253,249,0.82)',
+    borderWidth: 2,
+    borderColor:
+      'rgba(139,111,199,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  moveArrow: {
+    color: COLORS.purpleDark,
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 30,
+  },
+
+  moveText: {
+    color: COLORS.charcoal,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+
+  lookHint: {
+    position: 'absolute',
+    right: 20,
+    bottom: 118,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 18,
+    backgroundColor:
+      'rgba(255,253,249,0.78)',
+  },
+
+  lookHintText: {
+    color: COLORS.purpleDark,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  hotspot: {
+    position: 'absolute',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(220,207,244,0.94)',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+  },
+
+  hotspotOne: {
+    left: '24%',
+    top: '48%',
+  },
+
+  hotspotTwo: {
+    left: '40%',
+    top: '48%',
+  },
+
+  lockerHotspot: {
+    position: 'absolute',
+    right: 34,
+    top: '50%',
+    width: 76,
+    height: 76,
+    marginTop: -20,
+    borderRadius: 38,
+    backgroundColor: 'rgba(220, 207, 244, 0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.purple,
+  },
+
+  lockerIcon: {
+    fontSize: 30,
+  },
+
+  exitHotspot: {
+    position: 'absolute',
+    bottom: 105,
+    alignSelf: 'center',
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: 'rgba(169, 220, 199, 0.96)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.green,
+  },
+
+  exitHotspotText: {
+    fontSize: 32,
+  },
+
+  keypadHotspot: {
+    right: '18%',
+    top: '54%',
+    backgroundColor: 'rgba(139,111,199,0.95)',
+  },
+
+  hotspotText: {
+    color: COLORS.purpleDark,
+    fontSize: 22,
+    fontWeight: '800',
+  },
+
+  keypadIcon: {
+    fontSize: 21,
+  },
+
+  instruction: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 28,
+    padding: 18,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,253,249,0.95)',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+  },
+
+  instructionTitle: {
+    color: COLORS.purpleDark,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+
+  instructionText: {
+    color: COLORS.charcoal,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  modalLayer: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(52,49,58,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+
+  clueCard: {
+    width: '92%',
+    maxWidth: 390,
+    borderRadius: 30,
+    backgroundColor: COLORS.paper,
+    padding: 26,
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+  },
+
+  clueTitle: {
+    color: COLORS.purpleDark,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    marginBottom: 18,
+  },
+
+  clueLine: {
+    color: COLORS.charcoal,
+    fontSize: 20,
+    lineHeight: 29,
+    fontWeight: '700',
+  },
+
+  emptyLine: {
+    lineHeight: 13,
+  },
+
+  clueHint: {
+    marginTop: 16,
+    color: '#69636E',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+
+  primaryButton: {
+    marginTop: 20,
+    minHeight: 50,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    backgroundColor: COLORS.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textAlign: 'center',
+  },
+
+  keypadCard: {
+    width: '94%',
+    maxWidth: 400,
+    borderRadius: 30,
+    backgroundColor: COLORS.paper,
+    padding: 22,
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+  },
+
+  keypadTitle: {
+    color: COLORS.charcoal,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+
+  keypadSubtitle: {
+    color: '#77717B',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 5,
+  },
+
+  codeDisplay: {
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: COLORS.clue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+    marginBottom: 12,
+  },
+
+  codeText: {
+    color: COLORS.purpleDark,
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 4,
+  },
+
+  wrongText: {
+    color: '#A05C5C',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+
+  keyGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+
+  key: {
+    width: '31%',
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: '#F1EBF8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  enterKey: {
+    backgroundColor: COLORS.purple,
+  },
+
+  clearKey: {
+    backgroundColor: '#F8E8DD',
+  },
+
+  keyText: {
+    color: COLORS.charcoal,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  closeKeypad: {
+    marginTop: 14,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+
+  closeKeypadText: {
+    color: COLORS.purpleDark,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+
+  escapeLayer: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255,249,245,0.86)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 22,
+  },
+
+  escapeCard: {
+    width: '92%',
+    maxWidth: 390,
+    borderRadius: 32,
+    backgroundColor: COLORS.paper,
+    padding: 28,
+    alignItems: 'center',
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+  },
+
+  star: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: COLORS.clue,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  starText: {
+    color: COLORS.purpleDark,
+    fontSize: 38,
+  },
+
+  escapeTitle: {
+    color: COLORS.charcoal,
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: 18,
+    textAlign: 'center',
+  },
+
+  escapeSubtitle: {
+    color: '#6D6872',
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  learning: {
+    color: COLORS.purpleDark,
+    backgroundColor: COLORS.clue,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    marginTop: 18,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+});

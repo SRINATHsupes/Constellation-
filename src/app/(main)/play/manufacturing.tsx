@@ -1,5 +1,4 @@
-import { GLView } from 'expo-gl';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   SafeAreaView,
@@ -7,15 +6,56 @@ import {
   Text,
   View,
 } from 'react-native';
+import { GLView } from 'expo-gl';
 import * as THREE from 'three';
 
-type PartId = 'bigGear' | 'smallGear' | 'shaft';
+type PartId = 'gear' | 'motor' | 'cycle' | 'motorCycle' | 'robot';
 
-type Point3 = {
-  x: number;
-  y: number;
-  z: number;
+type Level = {
+  id: number;
+  title: string;
+  subtitle: string;
+  lesson: string;
+  parts: PartId[];
 };
+
+const LEVELS: Level[] = [
+  {
+    id: 1,
+    title: 'Gear',
+    subtitle: 'How gears transfer motion',
+    lesson: 'Place the gear on the machine.',
+    parts: ['gear'],
+  },
+  {
+    id: 2,
+    title: 'Motor + Gear',
+    subtitle: 'A motor creates rotation',
+    lesson: 'Connect the motor to the gear.',
+    parts: ['motor', 'gear'],
+  },
+  {
+    id: 3,
+    title: 'Cycle',
+    subtitle: 'Pedals drive the wheel',
+    lesson: 'Build the cycle mechanism.',
+    parts: ['cycle'],
+  },
+  {
+    id: 4,
+    title: 'Motor + Cycle',
+    subtitle: 'Power can drive a vehicle',
+    lesson: 'Connect the motor to the cycle.',
+    parts: ['motorCycle'],
+  },
+  {
+    id: 5,
+    title: 'Robot',
+    subtitle: 'Machines come together',
+    lesson: 'Assemble the robot and make it move.',
+    parts: ['robot'],
+  },
+];
 
 const COLORS = {
   background: '#FFF9F5',
@@ -32,1907 +72,1022 @@ const COLORS = {
   yellow: '#F2C96D',
   border: '#E8DDE7',
   softPurple: '#EEE7FA',
+  softPink: '#FCE9EF',
   softBlue: '#E8F2FC',
+  softMint: '#E4F4ED',
 };
 
-const TARGETS: Record<PartId, Point3> = {
-  bigGear: { x: -1.35, y: 0.25, z: 0.35 },
-  smallGear: { x: 1.25, y: 0.25, z: 0.35 },
-  shaft: { x: 0, y: -0.85, z: 0.35 },
+const PART_NAMES: Record<PartId, string> = {
+  gear: 'Gear',
+  motor: 'Motor',
+  cycle: 'Cycle',
+  motorCycle: 'Motor Cycle',
+  robot: 'Robot',
 };
 
-const TRAY_POSITIONS: Record<PartId, Point3> = {
-  bigGear: { x: -2.25, y: 2.0, z: 0.5 },
-  smallGear: { x: 0, y: 2.0, z: 0.5 },
-  shaft: { x: 2.25, y: 2.0, z: 0.5 },
+const PART_COLORS: Record<PartId, string> = {
+  gear: COLORS.lavender,
+  motor: COLORS.peach,
+  cycle: COLORS.sky,
+  motorCycle: COLORS.mint,
+  robot: COLORS.yellow,
 };
 
-const PART_LABELS: Record<PartId, string> = {
-  bigGear: 'BIG GEAR',
-  smallGear: 'SMALL GEAR',
-  shaft: 'SHAFT',
-};
-
-function createGearGeometry(
-  outerRadius: number,
-  innerRadius: number,
-  teeth: number,
-  depth: number,
-) {
+function createGear(radius: number, teeth: number, depth: number) {
   const shape = new THREE.Shape();
-  const points = teeth * 4;
 
-  for (let i = 0; i <= points; i += 1) {
-    const angle = (i / points) * Math.PI * 2;
+  for (let i = 0; i < teeth * 4; i += 1) {
+    const angle = (i / (teeth * 4)) * Math.PI * 2;
     const phase = i % 4;
+    const r =
+      phase === 0 || phase === 3
+        ? radius
+        : phase === 1 || phase === 2
+          ? radius * 1.14
+          : radius;
 
-    let radius = outerRadius;
+    const x = Math.cos(angle) * r;
+    const y = Math.sin(angle) * r;
 
-    if (phase === 0 || phase === 3) {
-      radius = innerRadius;
-    }
-
-    const x = Math.cos(angle) * radius;
-    const y = Math.sin(angle) * radius;
-
-    if (i === 0) {
-      shape.moveTo(x, y);
-    } else {
-      shape.lineTo(x, y);
-    }
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
   }
+
+  shape.closePath();
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth,
     bevelEnabled: true,
-    bevelSegments: 3,
-    bevelSize: 0.06,
-    bevelThickness: 0.05,
+    bevelSegments: 2,
+    bevelSize: 0.035,
+    bevelThickness: 0.04,
   });
 
   geometry.center();
 
-  return geometry;
-}
-
-function makeMaterial(
-  color: string,
-  metalness = 0.2,
-  roughness = 0.45,
-) {
-  return new THREE.MeshStandardMaterial({
-    color,
-    metalness,
-    roughness,
+  const material = new THREE.MeshStandardMaterial({
+    color: COLORS.lavender,
+    roughness: 0.55,
+    metalness: 0.15,
   });
-}
 
-function addBox(
-  parent: THREE.Object3D,
-  size: Point3,
-  position: Point3,
-  color: string,
-  radius = 0,
-) {
-  const geometry = new THREE.BoxGeometry(
-    size.x,
-    size.y,
-    size.z,
+  const mesh = new THREE.Mesh(geometry, material);
+
+  const hole = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.28, radius * 0.28, depth + 0.08, 24),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.background,
+      roughness: 0.8,
+    }),
   );
 
-  const mesh = new THREE.Mesh(
-    geometry,
-    makeMaterial(color, 0.08, 0.6),
-  );
+  hole.rotation.x = Math.PI / 2;
+  hole.position.z = 0;
 
-  mesh.position.set(
-    position.x,
-    position.y,
-    position.z,
-  );
-
-  if (radius > 0) {
-    mesh.scale.set(
-      1,
-      1,
-      1,
-    );
-  }
-
-  parent.add(mesh);
-
-  return mesh;
-}
-
-function createGear(
-  radius: number,
-  teeth: number,
-  color: string,
-) {
-  const geometry = createGearGeometry(
-    radius,
-    radius * 0.78,
-    teeth,
-    0.28,
-  );
-
-  const gear = new THREE.Mesh(
-    geometry,
-    makeMaterial(color, 0.7, 0.25),
-  );
-
-  gear.rotation.x = 0;
-
-  return gear;
-}
-
-function createGearHub(
-  radius: number,
-  color: string,
-) {
-  const hub = new THREE.Mesh(
-    new THREE.CylinderGeometry(
-      radius,
-      radius,
-      0.18,
-      32,
-    ),
-    makeMaterial(color, 0.8, 0.2),
-  );
-
-  hub.rotation.x = Math.PI / 2;
-
-  return hub;
-}
-
-function createTargetRing(
-  position: Point3,
-  color: string,
-  radius: number,
-) {
   const group = new THREE.Group();
-
-  const outer = new THREE.Mesh(
-    new THREE.TorusGeometry(
-      radius,
-      0.06,
-      14,
-      56,
-    ),
-    new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.95,
-    }),
-  );
-
-  group.add(outer);
-
-  const inner = new THREE.Mesh(
-    new THREE.RingGeometry(
-      radius * 0.55,
-      radius * 0.72,
-      40,
-    ),
-    new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.16,
-      side: THREE.DoubleSide,
-    }),
-  );
-
-  group.add(inner);
-
-  group.position.set(
-    position.x,
-    position.y,
-    position.z,
-  );
+  group.add(mesh);
+  group.add(hole);
 
   return group;
 }
 
-function createMachine(scene: THREE.Scene) {
-  const machine = new THREE.Group();
-
-  // Soft workshop panel.
-  addBox(
-    machine,
-    { x: 6.4, y: 3.8, z: 0.24 },
-    { x: 0, y: -0.1, z: -0.9 },
-    '#F1ECFA',
-  );
-
-  // Workshop floor.
-  addBox(
-    machine,
-    { x: 6.8, y: 0.22, z: 2.8 },
-    { x: 0, y: -1.65, z: 0 },
-    '#F8E8DD',
-  );
-
-  // Left frame.
-  addBox(
-    machine,
-    { x: 0.25, y: 3.35, z: 0.32 },
-    { x: -3.05, y: -0.05, z: 0 },
-    '#EBCFBD',
-  );
-
-  // Right frame.
-  addBox(
-    machine,
-    { x: 0.25, y: 3.35, z: 0.32 },
-    { x: 3.05, y: -0.05, z: 0 },
-    '#EBCFBD',
-  );
-
-  // Top frame.
-  addBox(
-    machine,
-    { x: 6.1, y: 0.25, z: 0.32 },
-    { x: 0, y: 1.58, z: 0 },
-    '#EBCFBD',
-  );
-
-  // Bottom frame.
-  addBox(
-    machine,
-    { x: 6.1, y: 0.25, z: 0.32 },
-    { x: 0, y: -1.35, z: 0 },
-    '#EBCFBD',
-  );
-
-  // Central support.
-  addBox(
-    machine,
-    { x: 0.2, y: 2.7, z: 0.3 },
-    { x: 0, y: 0.05, z: -0.05 },
-    '#DCCFF4',
-  );
-
-  // Machine base blocks.
-  addBox(
-    machine,
-    { x: 1.55, y: 0.22, z: 0.5 },
-    { x: -1.35, y: -1.25, z: 0.15 },
-    '#DCCFF4',
-  );
-
-  addBox(
-    machine,
-    { x: 1.25, y: 0.22, z: 0.5 },
-    { x: 1.25, y: -1.25, z: 0.15 },
-    '#DCCFF4',
-  );
-
-  scene.add(machine);
-
-  return machine;
-}
-
-function createTray(scene: THREE.Scene) {
-  const tray = new THREE.Group();
-
-  addBox(
-    tray,
-    { x: 6.5, y: 0.12, z: 1.15 },
-    { x: 0, y: 2.05, z: 0.15 },
-    '#EEE7FA',
-  );
-
-  addBox(
-    tray,
-    { x: 6.5, y: 0.15, z: 0.18 },
-    { x: 0, y: 2.62, z: 0.2 },
-    '#E8DDE7',
-  );
-
-  scene.add(tray);
-
-  return tray;
-}
-
-function createShaft() {
+function createMotor() {
   const group = new THREE.Group();
 
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.25, 0.9, 0.8),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.peach,
+      roughness: 0.5,
+    }),
+  );
+
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.34, 0.34, 0.32, 24),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.purple,
+      roughness: 0.45,
+    }),
+  );
+
+  cap.rotation.z = Math.PI / 2;
+  cap.position.x = 0.76;
+
   const shaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(
-      0.13,
-      0.13,
-      2.7,
-      32,
-    ),
-    makeMaterial(
-      COLORS.peach,
-      0.8,
-      0.22,
-    ),
+    new THREE.CylinderGeometry(0.1, 0.1, 0.55, 16),
+    new THREE.MeshStandardMaterial({
+      color: '#FFFFFF',
+      metalness: 0.65,
+      roughness: 0.3,
+    }),
   );
 
   shaft.rotation.z = Math.PI / 2;
+  shaft.position.x = 1.05;
 
+  group.add(body);
+  group.add(cap);
   group.add(shaft);
-
-  const endA = new THREE.Mesh(
-    new THREE.CylinderGeometry(
-      0.2,
-      0.2,
-      0.18,
-      32,
-    ),
-    makeMaterial(
-      '#D9966D',
-      0.75,
-      0.25,
-    ),
-  );
-
-  endA.rotation.z = Math.PI / 2;
-  endA.position.x = -1.3;
-
-  const endB = endA.clone();
-  endB.position.x = 1.3;
-
-  group.add(endA);
-  group.add(endB);
 
   return group;
 }
 
-function createTrayPart(
-  part: PartId,
-) {
+function createWheel(radius: number) {
+  const wheel = new THREE.Mesh(
+    new THREE.TorusGeometry(radius, radius * 0.16, 12, 32),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.sky,
+      roughness: 0.5,
+    }),
+  );
+
+  wheel.rotation.x = Math.PI / 2;
+
+  return wheel;
+}
+
+function createCycle() {
   const group = new THREE.Group();
 
-  if (part === 'bigGear') {
-    const gear = createGear(
-      0.68,
-      12,
-      COLORS.lavender,
+  const frameMaterial = new THREE.MeshStandardMaterial({
+    color: COLORS.purple,
+    roughness: 0.5,
+  });
+
+  const tube = (a: THREE.Vector3, b: THREE.Vector3) => {
+    const direction = new THREE.Vector3().subVectors(b, a);
+    const length = direction.length();
+
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.055, 0.055, length, 10),
+      frameMaterial,
     );
 
-    group.add(gear);
-
-    const hub = createGearHub(
-      0.18,
-      COLORS.purple,
+    mesh.position.copy(a.clone().add(b).multiplyScalar(0.5));
+    mesh.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      direction.normalize(),
     );
 
-    group.add(hub);
-  }
+    return mesh;
+  };
 
-  if (part === 'smallGear') {
-    const gear = createGear(
-      0.48,
-      10,
-      COLORS.sky,
-    );
+  const left = new THREE.Vector3(-0.8, 0, 0);
+  const right = new THREE.Vector3(0.8, 0, 0);
+  const center = new THREE.Vector3(0, 0.72, 0);
+  const top = new THREE.Vector3(0.5, 1.15, 0);
 
-    group.add(gear);
+  group.add(tube(left, center));
+  group.add(tube(center, right));
+  group.add(tube(left, top));
+  group.add(tube(top, center));
+  group.add(tube(top, right));
 
-    const hub = createGearHub(
-      0.14,
-      '#6B9FCF',
-    );
+  const wheelLeft = createWheel(0.62);
+  wheelLeft.position.set(-0.85, -0.05, 0);
 
-    group.add(hub);
-  }
+  const wheelRight = createWheel(0.62);
+  wheelRight.position.set(0.85, -0.05, 0);
 
-  if (part === 'shaft') {
-    group.add(createShaft());
-  }
+  group.add(wheelLeft);
+  group.add(wheelRight);
+
+  const pedal = new THREE.Mesh(
+    new THREE.TorusGeometry(0.18, 0.035, 8, 20),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.yellow,
+      roughness: 0.45,
+    }),
+  );
+
+  pedal.position.set(0, 0.72, 0);
+  pedal.rotation.x = Math.PI / 2;
+
+  group.add(pedal);
 
   return group;
+}
+
+function createRobot() {
+  const group = new THREE.Group();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: COLORS.yellow,
+    roughness: 0.5,
+  });
+
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 1.35, 0.75),
+    material,
+  );
+
+  body.position.y = 0.05;
+
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(1.05, 0.75, 0.7),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.sky,
+      roughness: 0.5,
+    }),
+  );
+
+  head.position.y = 1.1;
+
+  const eyeMaterial = new THREE.MeshStandardMaterial({
+    color: COLORS.purpleDark,
+    emissive: COLORS.purple,
+    emissiveIntensity: 0.25,
+  });
+
+  const eye1 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09, 16, 16),
+    eyeMaterial,
+  );
+
+  const eye2 = eye1.clone();
+
+  eye1.position.set(-0.22, 1.18, 0.38);
+  eye2.position.set(0.22, 1.18, 0.38);
+
+  const arm1 = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.13, 0.13, 1.0, 12),
+    new THREE.MeshStandardMaterial({
+      color: COLORS.peach,
+      roughness: 0.5,
+    }),
+  );
+
+  const arm2 = arm1.clone();
+
+  arm1.position.set(-0.78, 0.05, 0);
+  arm2.position.set(0.78, 0.05, 0);
+
+  arm1.rotation.z = 0.25;
+  arm2.rotation.z = -0.25;
+
+  group.add(body);
+  group.add(head);
+  group.add(eye1);
+  group.add(eye2);
+  group.add(arm1);
+  group.add(arm2);
+
+  return group;
+}
+
+function createPart(part: PartId) {
+  switch (part) {
+    case 'gear':
+      return createGear(0.72, 12, 0.22);
+    case 'motor':
+      return createMotor();
+    case 'cycle':
+      return createCycle();
+    case 'motorCycle':
+      return createMotor();
+    case 'robot':
+      return createRobot();
+  }
 }
 
 export default function ManufacturingScreen() {
-  const [selectedPart, setSelectedPart] =
-    useState<PartId | null>(null);
+  const [levelIndex, setLevelIndex] = useState(0);
+  const [placed, setPlaced] = useState<PartId[]>([]);
+  const [running, setRunning] = useState(false);
+  const [message, setMessage] = useState('Touch a part and drag it into the machine.');
+  const [ready, setReady] = useState(false);
 
-  const [placed, setPlaced] =
-    useState<Record<PartId, boolean>>({
-      bigGear: false,
-      smallGear: false,
-      shaft: false,
+  const level = LEVELS[levelIndex];
+
+  const placedSet = useMemo(() => new Set(placed), [placed]);
+
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const machineRef = useRef<THREE.Group | null>(null);
+  const trayRef = useRef<THREE.Group | null>(null);
+  const targetsRef = useRef<Partial<Record<PartId, THREE.Group>>>({});
+  const draggableRef = useRef<Partial<Record<PartId, THREE.Group>>>({});
+  const activePartRef = useRef<PartId | null>(null);
+  const animationRef = useRef<number | null>(null);
+
+  const screenPoint = useRef({ x: 0, y: 0 });
+  const mouseDownRef = useRef(false);
+
+  const resetScene = () => {
+    setPlaced([]);
+    setRunning(false);
+    setMessage('Touch a part and drag it into the machine.');
+
+    Object.values(draggableRef.current).forEach((part) => {
+      if (part) {
+        part.visible = true;
+      }
     });
 
-  const [running, setRunning] =
-    useState(false);
+    Object.values(targetsRef.current).forEach((target) => {
+      if (target) {
+        target.visible = false;
+      }
+    });
+  };
 
-  const [message, setMessage] =
-    useState(
-      'Press and drag a 3D part into the machine.',
+  useEffect(() => {
+    resetScene();
+  }, [levelIndex]);
+
+  useEffect(() => {
+    const allPlaced = level.parts.every((part) => placedSet.has(part));
+
+    if (allPlaced && !running) {
+      setMessage('Great! Press RUN MACHINE.');
+    }
+  }, [placedSet, level.parts, running]);
+
+  const onContextCreate = async (gl: any) => {
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(COLORS.background);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      gl.drawingBufferWidth / gl.drawingBufferHeight,
+      0.1,
+      100,
     );
 
-  const selectedRef =
-    useRef<PartId | null>(null);
+    camera.position.set(0, 1.5, 8);
+    camera.lookAt(0, 0.7, 0);
 
-  const dragPartRef =
-    useRef<PartId | null>(null);
-
-  const dragPlaneRef =
-    useRef<THREE.Plane>(
-      new THREE.Plane(
-        new THREE.Vector3(0, 0, 1),
-        0,
-      ),
-    );
-
-  const dragOffsetRef =
-    useRef(
-      new THREE.Vector3(),
-    );
-
-  const raycasterRef =
-    useRef(
-      new THREE.Raycaster(),
-    );
-
-  const pointerRef =
-    useRef(
-      new THREE.Vector2(),
-    );
-
-  const cameraRef =
-    useRef<THREE.PerspectiveCamera | null>(
-      null,
-    );
-
-  const sceneRef =
-    useRef<THREE.Scene | null>(
-      null,
-    );
-
-  const rendererRef =
-    useRef<THREE.WebGLRenderer | null>(
-      null,
-    );
-
-  const placedRef =
-    useRef(placed);
-
-  const runningRef =
-    useRef(false);
-
-  const viewportRef =
-    useRef({
-      width: 1,
-      height: 1,
+    const renderer = new THREE.WebGLRenderer({
+      context: gl,
+      antialias: true,
     });
 
-  const objectsRef =
-    useRef<{
-      bigGear?: THREE.Group;
-      smallGear?: THREE.Group;
-      shaft?: THREE.Group;
-      targets: Record<
-        PartId,
-        THREE.Group
-      >;
-    }>({
-      targets: {
-        bigGear:
-          new THREE.Group(),
-        smallGear:
-          new THREE.Group(),
-        shaft:
-          new THREE.Group(),
-      },
+    renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
+    renderer.setPixelRatio(1);
+
+    const ambient = new THREE.AmbientLight('#FFFFFF', 2.2);
+    scene.add(ambient);
+
+    const key = new THREE.DirectionalLight('#FFFFFF', 2.5);
+    key.position.set(3, 6, 5);
+    scene.add(key);
+
+    const machine = new THREE.Group();
+
+    const platform = new THREE.Mesh(
+      new THREE.BoxGeometry(5.8, 0.28, 2.2),
+      new THREE.MeshStandardMaterial({
+        color: COLORS.paper,
+        roughness: 0.75,
+      }),
+    );
+
+    platform.position.y = -0.55;
+    machine.add(platform);
+
+    const panel = new THREE.Mesh(
+      new THREE.BoxGeometry(5.5, 2.5, 0.3),
+      new THREE.MeshStandardMaterial({
+        color: COLORS.softBlue,
+        roughness: 0.8,
+      }),
+    );
+
+    panel.position.set(0, 0.65, -0.55);
+    machine.add(panel);
+
+    scene.add(machine);
+
+    const tray = new THREE.Group();
+    scene.add(tray);
+
+    sceneRef.current = scene;
+    cameraRef.current = camera;
+    rendererRef.current = renderer;
+    machineRef.current = machine;
+    trayRef.current = tray;
+
+    targetsRef.current = {};
+    draggableRef.current = {};
+
+    const xPositions = [-2.0, -0.7, 0.7, 2.0];
+
+    level.parts.forEach((part, index) => {
+      const object = createPart(part);
+      object.position.set(xPositions[index] ?? 0, -0.05, 0.5);
+      object.scale.setScalar(part === 'robot' ? 0.8 : 0.75);
+      object.userData.partId = part;
+
+      tray.add(object);
+      draggableRef.current[part] = object;
+
+      const target = new THREE.Group();
+      target.position.set(
+        part === 'motor' ? -0.9 : part === 'gear' ? 0.9 : 0,
+        part === 'robot' ? 0.35 : 0.15,
+        0.2,
+      );
+
+      target.scale.setScalar(part === 'robot' ? 0.8 : 0.75);
+      target.userData.partId = part;
+
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.35, 0.43, 32),
+        new THREE.MeshBasicMaterial({
+          color: PART_COLORS[part],
+          transparent: true,
+          opacity: 0.5,
+          side: THREE.DoubleSide,
+        }),
+      );
+
+      ring.rotation.x = Math.PI / 2;
+      target.add(ring);
+
+      target.visible = false;
+      machine.add(target);
+      targetsRef.current[part] = target;
     });
 
-  useEffect(() => {
-    selectedRef.current =
-      selectedPart;
-  }, [selectedPart]);
-
-  useEffect(() => {
-    placedRef.current =
-      placed;
-  }, [placed]);
-
-  useEffect(() => {
-    runningRef.current =
-      running;
-  }, [running]);
-
-  const onContextCreate =
-    async (gl: any) => {
-      const width =
-        gl.drawingBufferWidth;
-
-      const height =
-        gl.drawingBufferHeight;
-
-      viewportRef.current = {
-        width,
-        height,
-      };
-
-      const scene =
-        new THREE.Scene();
-
-      scene.background =
-        new THREE.Color(
-          COLORS.background,
-        );
-
-      sceneRef.current =
-        scene;
-
-      const camera =
-        new THREE.PerspectiveCamera(
-          48,
-          width / height,
-          0.1,
-          100,
-        );
-
-      camera.position.set(
-        0,
-        0.25,
-        10.5,
-      );
-
-      camera.lookAt(
-        0,
-        0.45,
-        0,
-      );
-
-      cameraRef.current =
-        camera;
-
-      const renderer =
-        new THREE.WebGLRenderer({
-          context: gl,
-          antialias: true,
-        });
-
-      renderer.setSize(
-        width,
-        height,
-        false,
-      );
-
-      renderer.setPixelRatio(1);
-
-      rendererRef.current =
-        renderer;
-
-      const hemisphere =
-        new THREE.HemisphereLight(
-          '#FFFFFF',
-          '#D9CBE8',
-          2.4,
-        );
-
-      scene.add(
-        hemisphere,
-      );
-
-      const directional =
-        new THREE.DirectionalLight(
-          '#FFFFFF',
-          3.2,
-        );
-
-      directional.position.set(
-        -4,
-        6,
-        8,
-      );
-
-      scene.add(
-        directional,
-      );
-
-      const point =
-        new THREE.PointLight(
-          COLORS.purple,
-          3.5,
-          14,
-        );
-
-      point.position.set(
-        0,
-        2.5,
-        5,
-      );
-
-      scene.add(point);
-
-      createTray(scene);
-      createMachine(scene);
-
-      /*
-       * Three-dimensional parts.
-       *
-       * These are NOT hidden.
-       * They physically sit inside
-       * the 3D parts tray.
-       */
-      (
-        Object.keys(
-          TRAY_POSITIONS,
-        ) as PartId[]
-      ).forEach((part) => {
-        const object =
-          createTrayPart(part);
-
-        const position =
-          TRAY_POSITIONS[part];
-
-        object.position.set(
-          position.x,
-          position.y,
-          position.z,
-        );
-
-        scene.add(object);
-
-        objectsRef.current[
-          part
-        ] = object;
-      });
-
-      /*
-       * Glowing machine sockets.
-       */
-      (
-        Object.keys(
-          TARGETS,
-        ) as PartId[]
-      ).forEach((part) => {
-        const radius =
-          part === 'shaft'
-            ? 0.85
-            : part === 'bigGear'
-              ? 0.78
-              : 0.57;
-
-        const color =
-          part === 'shaft'
-            ? COLORS.peach
-            : COLORS.purple;
-
-        const target =
-          createTargetRing(
-            TARGETS[part],
-            color,
-            radius,
-          );
-
-        scene.add(target);
-
-        objectsRef.current.targets[
-          part
-        ] = target;
-      });
-
-      /*
-       * Installed machine gears.
-       * Start invisible until dragged from
-       * the tray and installed.
-       */
-      const bigGear =
-        new THREE.Group();
-
-      bigGear.add(
-        createGear(
-          0.82,
-          12,
-          COLORS.lavender,
-        ),
-      );
-
-      bigGear.add(
-        createGearHub(
-          0.2,
-          COLORS.purple,
-        ),
-      );
-
-      bigGear.position.set(
-        TARGETS.bigGear.x,
-        TARGETS.bigGear.y,
-        TARGETS.bigGear.z,
-      );
-
-      bigGear.visible =
-        false;
-
-      scene.add(bigGear);
-
-      const smallGear =
-        new THREE.Group();
-
-      smallGear.add(
-        createGear(
-          0.57,
-          10,
-          COLORS.sky,
-        ),
-      );
-
-      smallGear.add(
-        createGearHub(
-          0.15,
-          '#6B9FCF',
-        ),
-      );
-
-      smallGear.position.set(
-        TARGETS.smallGear.x,
-        TARGETS.smallGear.y,
-        TARGETS.smallGear.z,
-      );
-
-      smallGear.visible =
-        false;
-
-      scene.add(
-        smallGear,
-      );
-
-      const shaft =
-        createShaft();
-
-      shaft.position.set(
-        TARGETS.shaft.x,
-        TARGETS.shaft.y,
-        TARGETS.shaft.z,
-      );
-
-      shaft.visible =
-        false;
-
-      scene.add(shaft);
-
-      objectsRef.current.bigGear =
-        bigGear;
-
-      objectsRef.current.smallGear =
-        smallGear;
-
-      objectsRef.current.shaft =
-        shaft;
-
-      const animate =
-        () => {
-          requestAnimationFrame(
-            animate,
-          );
-
-          const now =
-            performance.now();
-
-          (
-            Object.keys(
-              TRAY_POSITIONS,
-            ) as PartId[]
-          ).forEach((part) => {
-            const object =
-              objectsRef.current[
-                part
-              ];
-
-            if (
-              !object ||
-              placedRef.current[
-                part
-              ]
-            ) {
-              return;
-            }
-
-            /*
-             * Floating 3D parts in the tray.
-             */
-            const base =
-              TRAY_POSITIONS[
-                part
-              ];
-
-            object.position.y =
-              base.y +
-              Math.sin(
-                now / 500 +
-                  Object.keys(
-                    TRAY_POSITIONS,
-                  ).indexOf(part),
-              ) *
-                0.045;
-
-            object.rotation.z =
-              now / 2200;
-          });
-
-          (
-            Object.keys(
-              TARGETS,
-            ) as PartId[]
-          ).forEach((part) => {
-            const target =
-              objectsRef.current.targets[
-                part
-              ];
-
-            if (
-              placedRef.current[
-                part
-              ]
-            ) {
-              target.visible =
-                false;
-
-              return;
-            }
-
-            target.visible =
-              true;
-
-            const active =
-              selectedRef.current ===
-              part;
-
-            const pulse =
-              1 +
-              Math.sin(
-                now / 180,
-              ) *
-                0.08;
-
-            const scale =
-              active
-                ? 1.12 * pulse
-                : pulse;
-
-            target.scale.set(
-              scale,
-              scale,
-              scale,
-            );
-
-            target.rotation.z =
-              now / 1800;
-          });
-
-          /*
-           * Machine animation.
-           */
-          if (
-            runningRef.current
-          ) {
-            if (
-              objectsRef.current
-                .bigGear
-            ) {
-              objectsRef.current.bigGear.rotation.z +=
-                0.028;
-            }
-
-            if (
-              objectsRef.current
-                .smallGear
-            ) {
-              objectsRef.current.smallGear.rotation.z -=
-                0.041;
-            }
-
-            if (
-              objectsRef.current
-                .shaft
-            ) {
-              objectsRef.current.shaft.rotation.x +=
-                0.06;
-            }
+    setReady(true);
+
+    const render = () => {
+      if (!rendererRef.current || !sceneRef.current || !cameraRef.current) {
+        return;
+      }
+
+      if (running) {
+        Object.values(targetsRef.current).forEach((target) => {
+          if (target?.visible) {
+            target.rotation.z += 0.025;
           }
+        });
+      }
 
-          renderer.render(
-            scene,
-            camera,
-          );
-
-          gl.endFrameEXP();
-        };
-
-      animate();
+      renderer.render(scene, camera);
+      gl.endFrameEXP();
+      animationRef.current = requestAnimationFrame(render);
     };
 
-  const screenToRay = (
-    locationX: number,
-    locationY: number,
-  ) => {
-    const camera =
-      cameraRef.current;
+    render();
+  };
 
-    if (!camera) {
-      return null;
-    }
+  const getPointerWorld = (x: number, y: number) => {
+    const camera = cameraRef.current;
+    if (!camera) return new THREE.Vector3();
 
-    const {
-      width,
-      height,
-    } =
-      viewportRef.current;
-
-    if (
-      !width ||
-      !height
-    ) {
-      return null;
-    }
-
-    pointerRef.current.set(
-      (locationX / width) *
-        2 -
-        1,
-      -(locationY / height) *
-        2 +
-        1,
+    const vector = new THREE.Vector3(
+      (x / 360) * 2 - 1,
+      -(y / 360) * 2 + 1,
+      0.5,
     );
 
-    raycasterRef.current.setFromCamera(
-      pointerRef.current,
-      camera,
+    vector.unproject(camera);
+
+    const direction = vector.sub(camera.position).normalize();
+    const distance = -camera.position.z / direction.z;
+
+    return camera.position.clone().add(direction.multiplyScalar(distance));
+  };
+
+  const handleTouchStart = (event: any) => {
+    const x = event.nativeEvent.locationX;
+    const y = event.nativeEvent.locationY;
+    mouseDownRef.current = true;
+
+    screenPoint.current = { x, y };
+
+    const camera = cameraRef.current;
+    const tray = trayRef.current;
+
+    if (!camera || !tray) return;
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2(
+      (x / 360) * 2 - 1,
+      -(y / 360) * 2 + 1,
     );
 
-    return raycasterRef.current;
-  };
+    raycaster.setFromCamera(mouse, camera);
 
-  const findPartFromObject = (
-    object: THREE.Object3D,
-  ): PartId | null => {
-    const parts: PartId[] = [
-      'bigGear',
-      'smallGear',
-      'shaft',
-    ];
+    const objects = Object.values(draggableRef.current).filter(
+      (item): item is THREE.Group => Boolean(item && item.visible),
+    );
 
-    for (
-      const part of parts
-    ) {
-      const partObject =
-        objectsRef.current[
-          part
-        ];
+    const hits = raycaster.intersectObjects(objects, true);
 
-      if (!partObject) {
-        continue;
-      }
+    if (hits.length === 0) return;
 
-      let current:
-        | THREE.Object3D
-        | null =
-        object;
+    let node: THREE.Object3D | null = hits[0].object;
 
-      while (current) {
-        if (
-          current ===
-          partObject
-        ) {
-          return part;
-        }
-
-        current =
-          current.parent;
-      }
+    while (node && !node.userData.partId) {
+      node = node.parent;
     }
 
-    return null;
+    const part = node?.userData.partId as PartId | undefined;
+
+    if (part && level.parts.includes(part)) {
+      activePartRef.current = part;
+      setMessage(`Move the ${PART_NAMES[part]} to its matching place.`);
+    }
   };
 
-  const getPointerPosition = (
-    event: any,
-  ) => {
-    const native =
-      event?.nativeEvent ?? event;
+  const handleTouchMove = (event: any) => {
+    const part = activePartRef.current;
+    const object = part ? draggableRef.current[part] : undefined;
 
-    return {
-      x:
-        native?.locationX ??
-        native?.offsetX ??
-        native?.clientX ??
-        native?.pageX ??
-        0,
-      y:
-        native?.locationY ??
-        native?.offsetY ??
-        native?.clientY ??
-        native?.pageY ??
-        0,
-    };
+    if (!part || !object) return;
+
+    const x = event.nativeEvent.locationX;
+    const y = event.nativeEvent.locationY;
+
+    const world = getPointerWorld(x, y);
+
+    object.position.x = THREE.MathUtils.clamp(world.x, -2.6, 2.6);
+    object.position.y = THREE.MathUtils.clamp(world.y, -0.2, 2.0);
   };
 
-  const handleTouchStart = (
-    event: any,
-  ) => {
-    const { x, y } =
-      getPointerPosition(event);
+  const handleTouchEnd = () => {
+    mouseDownRef.current = false;
+    const part = activePartRef.current;
 
-    const ray =
-      screenToRay(x, y);
+    if (!part) return;
 
-    if (!ray) {
+    const object = draggableRef.current[part];
+    const target = targetsRef.current[part];
+
+    if (!object || !target) {
+      activePartRef.current = null;
       return;
     }
 
-    const draggableObjects =
-      (
-        Object.keys(
-          TRAY_POSITIONS,
-        ) as PartId[]
-      )
-        .map(
-          (part) =>
-            objectsRef.current[
-              part
-            ],
-        )
-        .filter(
-          (
-            object,
-          ): object is THREE.Group =>
-            Boolean(object),
-        )
-        .filter(
-          (object) => object.visible,
-        );
+    const distance = object.position.distanceTo(target.position);
 
-    const hits =
-      ray.intersectObjects(
-        draggableObjects,
-        true,
+    if (distance < 1.15) {
+      object.visible = false;
+      target.visible = true;
+      setPlaced((current) =>
+        current.includes(part) ? current : [...current, part],
       );
-
-    if (!hits.length) {
-      dragPartRef.current =
-        null;
-
-      return;
+      setMessage(`${PART_NAMES[part]} connected.`);
+    } else {
+      const trayIndex = level.parts.indexOf(part);
+      const xPositions = [-2.0, -0.7, 0.7, 2.0];
+      object.position.set(xPositions[trayIndex] ?? 0, -0.05, 0.5);
+      setMessage('Try the matching machine area.');
     }
 
-    const part =
-      findPartFromObject(
-        hits[0].object,
-      );
-
-    if (!part) {
-      return;
-    }
-
-    if (
-      placedRef.current[
-        part
-      ]
-    ) {
-      return;
-    }
-
-    const object =
-      objectsRef.current[
-        part
-      ];
-
-    if (!object) {
-      return;
-    }
-
-    dragPartRef.current =
-      part;
-
-    selectedRef.current =
-      part;
-
-    setSelectedPart(
-      part,
-    );
-
-    /*
-     * Keep the dragged object
-     * at the same depth as the
-     * machine.
-     */
-    const camera =
-      cameraRef.current;
-
-    if (!camera) {
-      return;
-    }
-
-    const normal =
-      new THREE.Vector3();
-
-    camera.getWorldDirection(
-      normal,
-    );
-
-    dragPlaneRef.current.setFromNormalAndCoplanarPoint(
-      normal,
-      object.position,
-    );
-
-    const hitPoint =
-      new THREE.Vector3();
-
-    if (
-      ray.ray.intersectPlane(
-        dragPlaneRef.current,
-        hitPoint,
-      )
-    ) {
-      dragOffsetRef.current
-        .copy(object.position)
-        .sub(hitPoint);
-    }
-
-    setMessage(
-      `Dragging ${PART_LABELS[part]} — put it on the glowing socket.`,
-    );
-  };
-
-  const handleTouchMove = (
-    event: any,
-  ) => {
-    const part =
-      dragPartRef.current;
-
-    if (!part) {
-      return;
-    }
-
-    const { x, y } =
-      getPointerPosition(event);
-
-    const ray =
-      screenToRay(x, y);
-
-    if (!ray) {
-      return;
-    }
-
-    const hitPoint =
-      new THREE.Vector3();
-
-    if (
-      !ray.ray.intersectPlane(
-        dragPlaneRef.current,
-        hitPoint,
-      )
-    ) {
-      return;
-    }
-
-    const object =
-      objectsRef.current[
-        part
-      ];
-
-    if (!object) {
-      return;
-    }
-
-    object.position.copy(
-      hitPoint,
-    );
-
-    object.position.add(
-      dragOffsetRef.current,
-    );
-
-  };
-
-  const finishDrag = (
-    x: number,
-    y: number,
-  ) => {
-    const part =
-      dragPartRef.current;
-
-    if (!part) {
-      return;
-    }
-
-    const ray =
-      screenToRay(x, y);
-
-    const object =
-      objectsRef.current[
-        part
-      ];
-
-    const target =
-      objectsRef.current.targets[
-        part
-      ];
-
-    if (
-      ray &&
-      object &&
-      target
-    ) {
-      const targetWorld =
-        new THREE.Vector3();
-
-      target.getWorldPosition(
-        targetWorld,
-      );
-
-      const dropPoint =
-        new THREE.Vector3();
-
-      const hit =
-        ray.ray.intersectPlane(
-          dragPlaneRef.current,
-          dropPoint,
-        );
-
-      const distance =
-        hit
-          ? dropPoint.distanceTo(
-              targetWorld,
-            )
-          : Infinity;
-
-      if (
-        distance < 1.35
-      ) {
-        const start =
-          object.position.clone();
-
-        const destination =
-          new THREE.Vector3(
-            TARGETS[part].x,
-            TARGETS[part].y,
-            TARGETS[part].z,
-          );
-
-        const startTime =
-          performance.now();
-
-        const snap =
-          (time: number) => {
-            const progress =
-              Math.min(
-                1,
-                (time -
-                  startTime) /
-                  320,
-              );
-
-            const eased =
-              1 -
-              Math.pow(
-                1 -
-                  progress,
-                3,
-              );
-
-            object.position.lerpVectors(
-              start,
-              destination,
-              eased,
-            );
-
-            object.rotation.z +=
-              0.08;
-
-            if (
-              progress < 1
-            ) {
-              requestAnimationFrame(
-                snap,
-              );
-            } else {
-              object.position.copy(
-                destination,
-              );
-
-              object.rotation.set(
-                0,
-                0,
-                0,
-              );
-
-              /*
-               * Convert the tray part
-               * into the installed part.
-               */
-              setPlaced(
-                (current) => ({
-                  ...current,
-                  [part]: true,
-                }),
-              );
-
-              placedRef.current = {
-                ...placedRef.current,
-                [part]: true,
-              };
-
-              selectedRef.current =
-                null;
-
-              setSelectedPart(
-                null,
-              );
-
-              const installed =
-                Object.values(
-                  placedRef.current,
-                ).filter(
-                  Boolean,
-                ).length;
-
-              if (
-                installed ===
-                3
-              ) {
-                setMessage(
-                  'All parts installed! Press RUN MACHINE.',
-                );
-              } else {
-                setMessage(
-                  'Great! Grab the next 3D part.',
-                );
-              }
-            }
-          };
-
-        /*
-         * Hide the original tray object
-         * after the snap animation.
-         */
-        object.visible = true;
-
-        requestAnimationFrame(
-          snap,
-        );
-      } else {
-        const trayPosition =
-          TRAY_POSITIONS[part];
-
-        object.position.set(
-          trayPosition.x,
-          trayPosition.y,
-          trayPosition.z,
-        );
-
-        object.rotation.set(
-          0,
-          0,
-          0,
-        );
-
-        setMessage(
-          'Not quite — try placing it on the glowing socket.',
-        );
-      }
-
-      target.scale.set(
-        1,
-        1,
-        1,
-      );
-    }
-
-    dragPartRef.current =
-      null;
-
-    selectedRef.current =
-      null;
-
-    setSelectedPart(
-      null,
-    );
-  };
-
-  const handleTouchEnd = (
-    event: any,
-  ) => {
-    const { x, y } =
-      getPointerPosition(event);
-
-    finishDrag(x, y);
+    activePartRef.current = null;
   };
 
   const runMachine = () => {
-    const complete =
-      Object.values(
-        placed,
-      ).every(Boolean);
+    const complete = level.parts.every((part) => placedSet.has(part));
 
     if (!complete) {
-      setMessage(
-        'Install all three parts first.',
-      );
-
+      setMessage('Finish connecting the parts first.');
       return;
     }
 
-    runningRef.current =
-      true;
-
     setRunning(true);
+    setMessage('Machine running! Watch the motion.');
 
-    setMessage(
-      'Machine running! Watch the gears turn.',
-    );
+    setTimeout(() => {
+      setRunning(false);
+      setMessage('Lesson complete. Move to the next machine.');
+    }, 4500);
   };
 
-  const resetMachine = () => {
-    runningRef.current =
-      false;
+  const nextLevel = () => {
+    if (levelIndex < LEVELS.length - 1) {
+      setLevelIndex((value) => value + 1);
+    }
+  };
 
-    selectedRef.current =
-      null;
+  const previousLevel = () => {
+    if (levelIndex > 0) {
+      setLevelIndex((value) => value - 1);
+    }
+  };
 
-    dragPartRef.current =
-      null;
+  useEffect(() => {
+    const handleKeyDown = (event: any) => {
+      if (event?.key === 'r' || event?.key === 'R') {
+        resetScene();
+      }
 
-    setRunning(false);
+      if (event?.key === 'ArrowLeft') {
+        previousLevel();
+      }
 
-    setSelectedPart(
-      null,
-    );
+      if (event?.key === 'ArrowRight') {
+        nextLevel();
+      }
 
-    const resetPlaced = {
-      bigGear: false,
-      smallGear: false,
-      shaft: false,
+      if (event?.key === 'Enter' || event?.key === ' ') {
+        runMachine();
+      }
     };
 
-    setPlaced(
-      resetPlaced,
-    );
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
 
-    placedRef.current =
-      resetPlaced;
-
-    (
-      Object.keys(
-        TRAY_POSITIONS,
-      ) as PartId[]
-    ).forEach((part) => {
-      const object =
-        objectsRef.current[
-          part
-        ];
-
-      if (!object) {
-        return;
-      }
-
-      object.position.set(
-        TRAY_POSITIONS[part].x,
-        TRAY_POSITIONS[part].y,
-        TRAY_POSITIONS[part].z,
-      );
-
-      object.rotation.set(
-        0,
-        0,
-        0,
-      );
-
-      object.visible =
-        true;
-    });
-
-    (
-      Object.keys(
-        TARGETS,
-      ) as PartId[]
-    ).forEach((part) => {
-      const targetObject =
-        objectsRef.current[
-          part
-        ];
-
-      if (!targetObject) {
-        return;
-      }
-
-      targetObject.visible =
-        true;
-
-      targetObject.position.set(
-        TARGETS[part].x,
-        TARGETS[part].y,
-        TARGETS[part].z,
-      );
-
-      targetObject.rotation.set(
-        0,
-        0,
-        0,
-      );
-    });
-
-    setMessage(
-      'Press and drag a 3D part into the machine.',
-    );
-  };
-
-  const placedCount =
-    Object.values(
-      placed,
-    ).filter(Boolean)
-      .length;
+    return undefined;
+  }, [levelIndex, placedSet, running]);
 
   return (
-    <SafeAreaView
-      style={styles.safe}
-    >
-      <View
-        style={styles.container}
-      >
-        <View
-          style={styles.header}
-        >
-          <View
-            style={styles.headerText}
-          >
-            <Text style={styles.kicker}>
-              TECH LAB
-            </Text>
-
-            <Text style={styles.title}>
-              Build the machine
-            </Text>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.root}>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.kicker}>TECH WORKSHOP</Text>
+            <Text style={styles.title}>{level.title}</Text>
+            <Text style={styles.subtitle}>{level.subtitle}</Text>
           </View>
 
-          <View
-            style={styles.counter}
-          >
-            <Text
-              style={styles.counterText}
+          <View style={styles.levelBadge}>
+            <Text style={styles.levelNumber}>{level.id}</Text>
+            <Text style={styles.levelTotal}>/ 5</Text>
+          </View>
+        </View>
+
+        <View style={styles.lessonRow}>
+          <View style={styles.lessonDot} />
+          <Text style={styles.lessonText}>{level.lesson}</Text>
+        </View>
+
+        <View style={styles.progressRow}>
+          {LEVELS.map((item, index) => (
+            <View
+              key={item.id}
+              style={[
+                styles.progressDot,
+                index <= levelIndex && styles.progressDotActive,
+              ]}
+            />
+          ))}
+        </View>
+
+        <View style={styles.partsLabelRow}>
+          <Text style={styles.partsLabel}>PARTS</Text>
+          <Text style={styles.partsHint}>Hold and drag</Text>
+        </View>
+
+        <View style={styles.partsRow}>
+          {level.parts.map((part) => (
+            <View
+              key={part}
+              style={[
+                styles.partChip,
+                {
+                  backgroundColor: placedSet.has(part)
+                    ? COLORS.softMint
+                    : COLORS.paper,
+                },
+              ]}
             >
-              {placedCount}/3
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.instruction}>
-          <Text style={styles.instructionText}>
-            Drag a part onto its matching socket
-          </Text>
+              <View
+                style={[
+                  styles.partDot,
+                  { backgroundColor: PART_COLORS[part] },
+                ]}
+              />
+              <Text style={styles.partName}>{PART_NAMES[part]}</Text>
+              {placedSet.has(part) && (
+                <Text style={styles.check}>✓</Text>
+              )}
+            </View>
+          ))}
         </View>
 
         <View
-          style={styles.sceneWrapper}
-          onLayout={(event) => {
-            const {
-              width,
-              height,
-            } =
-              event.nativeEvent.layout;
-
-            viewportRef.current = {
-              width,
-              height,
-            };
-          }}
+          style={styles.machine}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={handleTouchStart}
+          onResponderMove={handleTouchMove}
+          onResponderRelease={handleTouchEnd}
+          onResponderTerminate={handleTouchEnd}
         >
           <GLView
             style={styles.gl}
-            onContextCreate={
-              onContextCreate
-            }
-            onStartShouldSetResponder={() =>
-              true
-            }
-            onMoveShouldSetResponder={() =>
-              true
-            }
-            onResponderGrant={
-              handleTouchStart
-            }
-            onResponderMove={
-              handleTouchMove
-            }
-            onResponderRelease={
-              handleTouchEnd
-            }
-            onResponderTerminate={
-              handleTouchEnd
-            }
+            onContextCreate={onContextCreate}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+            onResponderGrant={handleTouchStart}
+            onResponderMove={handleTouchMove}
+            onResponderRelease={handleTouchEnd}
+            onResponderTerminate={handleTouchEnd}
           />
 
-
-          <View
-            pointerEvents="none"
-            style={styles.sceneHint}
-          >
-            <Text style={styles.sceneHintText}>
-              {message}
+          <View pointerEvents="none" style={styles.machineCaption}>
+            <Text style={styles.machineCaptionText}>
+              {running ? 'MACHINE RUNNING' : 'WORKSHOP'}
             </Text>
           </View>
 
+          {!ready && (
+            <View pointerEvents="none" style={styles.loading}>
+              <Text style={styles.loadingText}>Preparing workshop…</Text>
+            </View>
+          )}
         </View>
 
-        <View
-          style={styles.bottom}
-        >
+        <Text style={styles.status}>{message}</Text>
+
+        <View style={styles.controls}>
           <Pressable
-            onPress={runMachine}
+            style={[
+              styles.secondaryButton,
+              levelIndex === 0 && styles.disabledButton,
+            ]}
+            disabled={levelIndex === 0}
+            onPress={previousLevel}
+          >
+            <Text style={styles.secondaryText}>BACK</Text>
+          </Pressable>
+
+          <Pressable
             style={[
               styles.runButton,
-              placedCount !== 3 &&
+              (!level.parts.every((part) => placedSet.has(part)) || running) &&
                 styles.runButtonDisabled,
             ]}
+            disabled={
+              !level.parts.every((part) => placedSet.has(part)) || running
+            }
+            onPress={runMachine}
           >
-            <Text
-              style={styles.runText}
-            >
-              {running
-                ? '⚙  RUNNING'
-                : '▶  RUN MACHINE'}
+            <Text style={styles.runText}>
+              {running ? 'RUNNING…' : 'RUN MACHINE'}
             </Text>
           </Pressable>
 
           <Pressable
-            onPress={resetMachine}
-            style={styles.resetButton}
+            style={[
+              styles.secondaryButton,
+              levelIndex === LEVELS.length - 1 && styles.disabledButton,
+            ]}
+            disabled={levelIndex === LEVELS.length - 1}
+            onPress={nextLevel}
           >
-            <Text
-              style={styles.resetText}
-            >
-              RESET BUILD
-            </Text>
+            <Text style={styles.secondaryText}>NEXT</Text>
           </Pressable>
         </View>
+
+        <Pressable style={styles.resetButton} onPress={resetScene}>
+          <Text style={styles.resetText}>Reset machine</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    safe: {
-      flex: 1,
-      backgroundColor:
-        COLORS.background,
-    },
-
-    container: {
-      flex: 1,
-      paddingHorizontal: 14,
-      paddingTop: 6,
-    },
-
-    header: {
-      flexDirection:
-        'row',
-      alignItems:
-        'center',
-      justifyContent:
-        'space-between',
-      marginBottom: 8,
-    },
-
-    headerText: {
-      flex: 1,
-    },
-
-    kicker: {
-      color:
-        COLORS.purple,
-      fontSize: 10,
-      fontWeight:
-        '900',
-      letterSpacing: 1.4,
-    },
-
-    title: {
-      color: COLORS.charcoal,
-      fontSize: 21,
-      fontWeight: '900',
-      marginTop: 2,
-    },
-
-    counter: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      backgroundColor:
-        COLORS.softPurple,
-      alignItems:
-        'center',
-      justifyContent:
-        'center',
-      borderWidth: 1,
-      borderColor:
-        COLORS.border,
-      marginLeft: 10,
-    },
-
-    counterText: {
-      color:
-        COLORS.purpleDark,
-      fontSize: 16,
-      fontWeight:
-        '900',
-    },
-
-    instruction: {
-      height: 32,
-      borderRadius: 16,
-      backgroundColor:
-        COLORS.paper,
-      borderWidth: 1,
-      borderColor:
-        COLORS.border,
-      flexDirection:
-        'row',
-      alignItems:
-        'center',
-      justifyContent:
-        'center',
-      gap: 7,
-      marginBottom: 7,
-    },
-
-    instructionDot: {
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      backgroundColor:
-        COLORS.purple,
-    },
-
-    instructionText: {
-      color:
-        COLORS.muted,
-      fontSize: 9,
-      fontWeight:
-        '900',
-      letterSpacing: 0.5,
-    },
-
-    instructionArrow: {
-      color:
-        COLORS.purple,
-      fontSize: 15,
-      fontWeight:
-        '900',
-    },
-
-    sceneWrapper: {
-      flex: 1,
-      minHeight: 300,
-      borderRadius: 25,
-      overflow:
-        'hidden',
-      borderWidth: 1,
-      borderColor:
-        COLORS.border,
-      backgroundColor:
-        COLORS.background,
-    },
-
-    gl: {
-      flex: 1,
-    },
-
-    sceneTopLabel: {
-      position:
-        'absolute',
-      top: 8,
-      left: 14,
-    },
-
-    sceneTopLabelText: {
-      color:
-        COLORS.purpleDark,
-      fontSize: 9,
-      fontWeight:
-        '900',
-      letterSpacing: 1,
-    },
-
-    sceneHint: {
-      position:
-        'absolute',
-      left: 12,
-      right: 12,
-      top: 26,
-      alignItems:
-        'center',
-    },
-
-    sceneHintText: {
-      backgroundColor:
-        'rgba(255,253,251,0.94)',
-      color:
-        COLORS.charcoal,
-      paddingHorizontal:
-        13,
-      paddingVertical: 7,
-      borderRadius: 15,
-      fontSize: 11,
-      fontWeight:
-        '800',
-      overflow:
-        'hidden',
-      textAlign:
-        'center',
-    },
-
-    machineLabel: {
-      position:
-        'absolute',
-      left: 14,
-      bottom: 10,
-      backgroundColor:
-        'rgba(255,253,251,0.9)',
-      paddingHorizontal:
-        10,
-      paddingVertical: 5,
-      borderRadius: 10,
-    },
-
-    machineLabelText: {
-      color:
-        COLORS.muted,
-      fontSize: 8,
-      fontWeight:
-        '900',
-      letterSpacing: 1,
-    },
-
-    bottom: {
-      paddingTop: 8,
-      paddingBottom: 6,
-      gap: 5,
-    },
-
-    runButton: {
-      height: 50,
-      borderRadius: 17,
-      backgroundColor:
-        COLORS.purple,
-      alignItems:
-        'center',
-      justifyContent:
-        'center',
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      shadowOffset: {
-        width: 0,
-        height: 3,
-      },
-    },
-
-    runButtonDisabled: {
-      opacity: 0.45,
-    },
-
-    runText: {
-      color:
-        '#FFFFFF',
-      fontSize: 13,
-      fontWeight:
-        '900',
-      letterSpacing: 0.4,
-    },
-
-    resetButton: {
-      height: 27,
-      alignItems:
-        'center',
-      justifyContent:
-        'center',
-    },
-
-    resetText: {
-      color:
-        COLORS.muted,
-      fontSize: 10,
-      fontWeight:
-        '900',
-      letterSpacing: 0.5,
-    },
-  });
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  root: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  kicker: {
+    color: COLORS.purple,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+  },
+  title: {
+    marginTop: 2,
+    color: COLORS.charcoal,
+    fontSize: 30,
+    fontWeight: '800',
+  },
+  subtitle: {
+    marginTop: 2,
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  levelBadge: {
+    minWidth: 58,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+    backgroundColor: COLORS.softPurple,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  levelNumber: {
+    color: COLORS.purpleDark,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  levelTotal: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  lessonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 13,
+    borderRadius: 16,
+    backgroundColor: COLORS.paper,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  lessonDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: COLORS.purple,
+    marginRight: 9,
+  },
+  lessonText: {
+    flex: 1,
+    color: COLORS.charcoal,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 12,
+  },
+  progressDot: {
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.border,
+  },
+  progressDotActive: {
+    backgroundColor: COLORS.purple,
+  },
+  partsLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 14,
+    marginBottom: 7,
+  },
+  partsLabel: {
+    color: COLORS.charcoal,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  partsHint: {
+    color: COLORS.muted,
+    fontSize: 11,
+  },
+  partsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  partChip: {
+    minHeight: 40,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  partDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 7,
+  },
+  partName: {
+    color: COLORS.charcoal,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  check: {
+    color: COLORS.mint,
+    fontSize: 15,
+    fontWeight: '900',
+    marginLeft: 7,
+  },
+  machine: {
+    flex: 1,
+    minHeight: 300,
+    marginTop: 12,
+    borderRadius: 26,
+    overflow: 'hidden',
+    backgroundColor: COLORS.softBlue,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  gl: {
+    flex: 1,
+  },
+  machineCaption: {
+    position: 'absolute',
+    left: 16,
+    top: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,253,251,0.9)',
+  },
+  machineCaptionText: {
+    color: COLORS.purpleDark,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  loading: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  status: {
+    minHeight: 34,
+    marginTop: 8,
+    color: COLORS.muted,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  secondaryButton: {
+    minWidth: 64,
+    height: 46,
+    paddingHorizontal: 10,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.paper,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  secondaryText: {
+    color: COLORS.charcoal,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  runButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.purple,
+  },
+  runButtonDisabled: {
+    backgroundColor: COLORS.border,
+  },
+  runText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  disabledButton: {
+    opacity: 0.45,
+  },
+  resetButton: {
+    alignSelf: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+  },
+  resetText: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+});
